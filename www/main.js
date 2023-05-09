@@ -1,6 +1,5 @@
-const headers = {
-  "Content-Type": "application/json",
-};
+import usersModal from "./users_modal.js";
+import { headers } from "./utils.js";
 
 function genData(id, type, room = "") {
   let obj = {};
@@ -36,6 +35,7 @@ const ws = new WebSocket(`ws://${window.document.location.host}`, token);
 document.addEventListener("DOMContentLoaded", () => {
   // drawUsers();
   drawRooms();
+  usersModal();
   const form = document.querySelector("#auth");
   const input = document.createElement("input");
   input.id = "login";
@@ -67,21 +67,10 @@ ws.onmessage = function (message) {
     }
     return;
   }
-  // if (obj.type === "status") return drawUsers(obj.user, obj.status);
 
-  // if (JSON.parse(message.data).type === "login") {
-  //   if (Array.isArray(JSON.parse(message.data).content)) {
-  //     for (let i = 0; i < JSON.parse(message.data).content.length; i++) {
-  //       drawUser(JSON.parse(message.data).content[i]);
-  //     }
-  //   } else {
-  //     drawUser(JSON.parse(message.data).content);
-  //   }
-  // } else {
   const msgDiv = document.createElement("div");
-  msgDiv.innerHTML = obj.message;
+  msgDiv.innerHTML = `${obj.emitter}: ${obj.message}`;
   document.getElementById("messages").appendChild(msgDiv);
-  // }
 };
 
 let currentRoom = "";
@@ -89,74 +78,101 @@ const form = document.getElementById("msgForm");
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   const message = document.getElementById("msgBox").value;
-  let obj = genData(message, "message", currentRoom);
-  console.log(currentRoom);
-  ws.send(obj);
+  let obj = {
+    id: message,
+    type: "message",
+    room: currentRoom,
+    emitter: localStorage.getItem("login"),
+  };
+  ws.send(JSON.stringify(obj));
   document.getElementById("msgBox").value = "";
 });
 /***
   lol
 */
-function openRoom(id, room = "") {
-  document.querySelector("#to").innerHTML = `Send message to: ${id}`;
-  let obj = genData(id, "join", room);
+function openRoom(from, to, room = "") {
+  document.querySelector("#to").innerHTML = `Send message to: ${to}`;
+  let open = document.querySelector("#open_chat");
+  open.style.display = "flex";
 
-  ws.send(obj);
+  let obj = { from, to, type: "join", room };
+  currentRoom = room ? room : "";
+  ws.send(JSON.stringify(obj));
 }
-function drawUsers(user, status) {
+export function drawUsers(user, status) {
+  console.log(`${user}: ${status}`);
   // const { users } = await getUsers();
   // for (const user of users) {
   const drawn = document.querySelector(`#${user}`);
   const wrap = document.createElement("div");
+  const wrap_info = document.createElement("div");
+  wrap_info.classList = "wrap_info";
+  const name = document.createElement("h3");
+  const statusElement = document.createElement("span");
+  const open = document.createElement("button");
+
+  open.innerText = "open";
+  open.classList = "btn_open_chat";
+  name.innerText = user;
+  name.classList = "user_name";
+  wrap.classList = "user_card";
+
+  statusElement.id = user;
+  statusElement.innerText = status;
   if (drawn) {
-    console.log(user, status);
+    drawn.innerText = status;
     if (status === "offline") {
-      drawn.classList = "user user-disconnected";
-    } else drawn.classList = "user user-connected";
+      drawn.classList = "user-disconnected";
+    } else drawn.classList = "user-connected";
     return;
   }
-  wrap.innerHTML = user;
-  wrap.classList = "user";
-  wrap.id = user;
   if (status === "offline") {
-    wrap.classList.add("user-disconnected");
-  } else wrap.classList.add("user-connected");
+    statusElement.classList.add("user-disconnected");
+  } else statusElement.classList.add("user-connected");
 
-  document.getElementById("users").appendChild(wrap);
-  wrap.addEventListener("click", (e) => {
-    e.preventDefault();
-    openRoom(localStorage.getItem("login"));
-  });
+  wrap.appendChild(wrap_info);
+  wrap_info.appendChild(name);
+  wrap_info.appendChild(statusElement);
+  wrap.appendChild(open);
+
+  const modal = document.getElementById("user_cards");
+  if (modal) {
+    modal.appendChild(wrap);
+
+    open.addEventListener("click", (e) => {
+      e.preventDefault();
+      openRoom(localStorage.getItem("login"), user);
+    });
+  }
   // }
 }
 async function drawRooms() {
   const rooms = await getRooms();
-  console.log(rooms);
-  for (const room in rooms) {
-    let members = rooms[room];
+  for (const room of Object.entries(rooms)) {
+    //room[0] = room id, room[1] = members object
+    let to = "";
     const wrap = document.createElement("div");
-    wrap.innerHTML = room;
-    wrap.classList = "user";
-    wrap.id = room;
+    // if(room[1].length)
+    for (const client in room[1]) {
+      if (
+        localStorage.getItem("login") &&
+        localStorage.getItem("login") !== room[1][client]
+      ) {
+        to = room[1][client];
+        console.log(room[1][client], "should print");
+        wrap.innerText = room[1][client];
+      }
+    }
+    wrap.classList = "room";
+    wrap.id = room[0];
     document.getElementById("rooms").appendChild(wrap);
     wrap.addEventListener("click", (e) => {
       e.preventDefault();
-      openRoom(localStorage.getItem("login"), room);
-      currentRoom = room;
+      openRoom(localStorage.getItem("login"), to, room[0]);
     });
   }
-  // for (const user of users) {
-  // }
 }
-// function drawUser(content) {
-//   const user = document.createElement("div");
-//   user.innerHTML = content;
-//   user.id = content;
-//   document.getElementById("users").appendChild(user);
-//   user.addEventListener("click", (e) => {
-//     openChat(e.target.id);
-//   });
-// }
+
 //*http
 
 async function login(user) {
@@ -175,7 +191,13 @@ async function login(user) {
 }
 
 async function getRooms() {
-  return await fetch("http://localhost:8080/rooms", { method: "GET", headers })
+  return await fetch("http://localhost:8080/rooms", {
+    method: "GET",
+    headers: {
+      ...headers,
+      authorization: localStorage.getItem("login"),
+    },
+  })
     .then((response) => response.json())
     .then((data) => data);
 }
