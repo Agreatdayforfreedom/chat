@@ -1,5 +1,6 @@
 import usersModal from "./users_modal.js";
 import { headers } from "./utils.js";
+let currentRoom = ""; //todo: save it somewhere else
 
 function genData(id, type, room = "") {
   let obj = {};
@@ -37,11 +38,22 @@ document.addEventListener("DOMContentLoaded", () => {
   drawRooms();
   usersModal();
   const form = document.querySelector("#auth");
+  const users_btn = document.querySelector("#users_wrap");
+  if (localStorage.getItem("login")) {
+    form.remove();
+    users_btn.style.display = "block";
+  } else {
+    form.style.display = "flex";
+    users_btn.remove();
+  }
   const input = document.createElement("input");
   input.id = "login";
+  input.classList = "login_input";
+  input.placeholder = "Login...";
   const btn = document.createElement("button");
   btn.type = "submit";
-  btn.textContent = "login";
+  btn.classList = "login_btn";
+  btn.textContent = "Login";
   form.appendChild(input);
   form.appendChild(btn);
 
@@ -51,29 +63,53 @@ document.addEventListener("DOMContentLoaded", () => {
     const obj = genData(content, "login");
     // ws.send(obj);
     const user = await login(content);
-    console.log(user, "login");
     localStorage.setItem("auth", content);
     document.querySelector("#login").value = "";
   });
 });
 ws.onmessage = function (message) {
-  let obj = JSON.parse(message.data);
-  console.log({ obj });
-  if (Array.isArray(obj)) {
-    for (const o of obj) {
-      const data = JSON.parse(o);
-      console.log(data);
-      if (data.type === "status") drawUsers(data.user, data.status);
+  let { type, data } = JSON.parse(message.data);
+  if (Array.isArray(data)) {
+    if (type === "users") {
+      for (const o of data) {
+        const el = JSON.parse(o);
+        if (el.type === "status") drawUsers(el.user, el.status);
+      }
+      return;
     }
-    return;
+    drawMessages(data);
   }
-
-  const msgDiv = document.createElement("div");
-  msgDiv.innerHTML = `${obj.emitter}: ${obj.message}`;
-  document.getElementById("messages").appendChild(msgDiv);
 };
 
-let currentRoom = "";
+function drawMessages(obj, room) {
+  let state = document.querySelectorAll("#message");
+  //scroll start at bottom
+  let _user = localStorage.getItem("login");
+  console.log(room, currentRoom);
+
+  for (const item of obj) {
+    const data = JSON.parse(item);
+    const msgDiv = document.createElement("div");
+    const msgWrap = document.createElement("div");
+    const msgContent = document.createElement("span");
+    msgDiv.id = "message";
+    msgDiv.classList.add("message");
+    msgWrap.classList.add("message_wrap");
+
+    if (_user && _user === data.emitter) {
+      msgDiv.classList.add("message_right");
+    }
+
+    msgContent.innerHTML = data.message;
+    msgContent.classList.add("message_bubble");
+    msgDiv.appendChild(msgWrap);
+    msgWrap.appendChild(msgContent);
+    document.getElementById("messages").appendChild(msgDiv);
+    let scroll = document.querySelector("#messages");
+    scroll.scrollTop = scroll.scrollHeight;
+  }
+}
+
 const form = document.getElementById("msgForm");
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -91,16 +127,32 @@ form.addEventListener("submit", (event) => {
   lol
 */
 function openRoom(from, to, room = "") {
-  document.querySelector("#to").innerHTML = `Send message to: ${to}`;
+  if (currentRoom === room) return;
+  let state = document.querySelectorAll("#message");
+
+  if (room !== currentRoom) {
+    for (const el of state) {
+      el.remove();
+    }
+  }
+  document.querySelector(
+    "#messages"
+  ).style.background = `linear-gradient(rgba(22, 22, 22, 0.5), rgba(22, 22, 22, 0.5)),
+  url("./image/background.jpg")`;
+  document.querySelector("#header_chat_name").innerHTML = to;
+  document.querySelector(
+    "#header_chat_picture"
+  ).src = `https://secure.gravatar.com/avatar/${Math.floor(
+    Math.random() * 1000
+  )}?s=90&d=identicon`;
   let open = document.querySelector("#open_chat");
   open.style.display = "flex";
 
   let obj = { from, to, type: "join", room };
-  currentRoom = room ? room : "";
   ws.send(JSON.stringify(obj));
+  currentRoom = room ? room : "";
 }
 export function drawUsers(user, status) {
-  console.log(`${user}: ${status}`);
   // const { users } = await getUsers();
   // for (const user of users) {
   const drawn = document.querySelector(`#${user}`);
@@ -159,7 +211,6 @@ async function drawRooms() {
         localStorage.getItem("login") !== room[1][client]
       ) {
         to = room[1][client];
-        console.log(room[1][client], "should print");
         wrap.innerText = room[1][client];
       }
     }

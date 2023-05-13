@@ -17,7 +17,7 @@
   <body>
     <div class="main">
       <section>
-        <div class="users_wrap">
+        <div class="users_wrap" id="users_wrap" style="display: block">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
@@ -36,31 +36,48 @@
           <div id="users_modal_wrap"></div>
           <div id="users"></div>
         </div>
-        <form id="auth"></form>
+        <form id="auth" class="auth" style="display: none"></form>
         <div></div>
-        <div>Rooms</div>
         <div id="rooms"></div>
       </section>
 
-      <div></div>
       <div id="open_chat" style="display: none" class="chat_wrap">
-        <h1>Chat</h1>
-        <div>
-          <div id="messages"></div>
-
-          <form id="msgForm" style="display: flex">
-            <div class="form_control">
-              <label for="msgBox" id="to"></label>
-              <input
-                type="text"
-                class="input_msg"
-                placeholder="Send a message"
-                id="msgBox"
-              />
-            </div>
-            <input type="submit" value="Send" class="btn_send_msg" />
-          </form>
+        <div class="header_chat">
+          <img
+            class="header_chat_picture"
+            id="header_chat_picture"
+            alt="user image"
+          />
+          <h1 class="header_chat_name" id="header_chat_name"></h1>
         </div>
+        <div id="messages"></div>
+        <form id="msgForm" style="display: flex">
+          <div class="form_control">
+            <label for="msgBox" id="to"></label>
+            <input
+              type="text"
+              class="msg_input"
+              placeholder="Send a message..."
+              id="msgBox"
+            />
+          </div>
+          <button type="submit" class="btn_send_msg">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-6 h-6 btn_send_svg"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
+              />
+            </svg>
+          </button>
+        </form>
       </div>
     </div>
     <script type="module" src="main.js"></script>

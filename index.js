@@ -49,16 +49,13 @@ app.post("/login", (req, res) => {
 app.get("/rooms", isAuthHttp, async (_req, res) => {
   try {
     let roomsdb = {};
-    console.log(_req.user, "u");
     for await (const [key, value] of db.iterator({ gte: "room" })) {
-      console.log({ key, value }, "here");
       for (const owner in value) {
         if (value[owner] === _req.user) {
           roomsdb[key] = value;
         }
       }
     }
-    console.log(roomsdb);
     res.send(roomsdb);
   } catch (error) {
     console.log("nO FIELDS", error);
@@ -81,8 +78,9 @@ wss.getUniqueID = function () {
 };
 wss.on("connection", async (ws, request) => {
   const users = await redisClient.smembers("users");
-  console.log(users); //todo: when tab is closed, the user status is not set to offline
-  if (users) ws.send(JSON.stringify(users));
+
+  //todo: when tab is closed, the user status is not set to offline
+  if (users) ws.send(JSON.stringify({ type: "users", data: users }));
   const val = isAuth(request, ws);
   if (!val) return; //maybe retrieve the current connections?
   broadcastConnection(request, ws, "online");
@@ -98,28 +96,48 @@ wss.on("connection", async (ws, request) => {
       case "join":
         const room = obj["room"] ? obj.room : nanoid(); //todo: find existing room
         join(obj.from, obj.to, room, ws);
+        processStreamMessages(room, obj.from, ws).catch((err) =>
+          console.error(err)
+        );
+
         break;
       case "leave":
         leave(params);
         break;
       case "message":
-        console.log(rooms[obj.room], "room");
         const chat = Object.entries(rooms[obj.room]);
         for (const [, sock] of chat) {
           // console.log(
           //   sock === ws,
           //   "-----------------------------------------------------------------------------"
           // );
-
           sock.send(
             JSON.stringify({
               type: "message",
-              emitter: obj.emitter,
-              message: obj.id,
+              data: [
+                JSON.stringify({
+                  emitter: obj.emitter,
+                  message: obj.id,
+                }),
+              ],
+              room: obj.room,
             })
           );
         }
-        redisClient.xadd("chat_stream", "*", "message", msg);
+        try {
+          redisClient.xadd(
+            obj.room,
+            "*",
+            "message",
+            obj.id,
+            "emitter",
+            obj.emitter
+          );
+          // processStreamMessages(obj.roomroom, obj.from, ws).catch();
+        } catch (error) {
+          console.log(error);
+          break;
+        }
         break;
       default:
         console.warn(`Type: ${type} unknown`);
@@ -147,20 +165,13 @@ async function login(user) {
   }
 }
 async function join(from, to, room, client) {
-  console.log(from, to, room);
   for await (const roomdb of db.iterator({ gte: "room" })) {
-    console.log(roomdb[0]);
     if (roomdb[0] === room) {
-      // await db.put(`room/${room}`, { room: { member_1: from, member_2: to } });
-      // rooms[room][from] = client;
       if (!rooms[room]) rooms[room] = {};
       if (rooms[room][from] === client) return;
       if (rooms[room]) {
         rooms[room][from] = client;
       }
-      setTimeout(() => {
-        console.log(rooms, "settime");
-      }, 3000);
       return;
     } //todo: push client disconnected
     //todo: don't save the wsclient in the database
@@ -212,9 +223,9 @@ async function broadcastConnection(req, wsclient, status) {
     //   client.close();
     // }
     if (client.readyState === ws.OPEN) {
-      console.log(req.user);
       client.send(
         JSON.stringify([
+          { type: "users" },
           JSON.stringify({ type: "status", status, user: req.user }),
         ])
       );
@@ -231,37 +242,32 @@ function broadcast(msg) {
 
 let lastRecordId = "$";
 
-async function processStreamMessages() {
-  while (true) {
-    const [[, records_chat]] = await redisClientXRead.xread(
-      "BLOCK",
-      "0",
-      "STREAMS",
-      "chats_stream",
-      lastRecordId
-    );
-    console.log(`User: ${JSON.stringify(records_chat)}`);
-    for (const [recordId, [, user]] of records_chat) {
-      broadcast(user);
-      lastRecordId = recordId;
-    }
+async function processStreamMessages(stream, user, ws) {
+  let messages = [];
 
-    const [[, records]] = await redisClientXRead.xread(
-      "BLOCK",
-      "0",
-      "STREAMS",
-      "chat_stream",
-      lastRecordId
-    );
-    for (const [recordId, [, message]] of records) {
-      console.log(`Message from stream: ${message}`);
-      broadcast(message);
-      lastRecordId = recordId;
-    }
+  const [[, records_chat]] = await redisClientXRead.xread(
+    "BLOCK",
+    0,
+    "STREAMS",
+    stream,
+    0
+  );
+
+  //todo: once saw, persist the history in the database
+  console.log(records_chat);
+  for (const [, data] of records_chat) {
+    var multi = data.reduce((a, c, i) => {
+      return i % 2 === 0 ? a.concat([data.slice(i, i + 2)]) : a;
+    }, []);
+    let toObj = Object.fromEntries(multi);
+    // console.log(toObj);
+    messages.push(JSON.stringify(toObj));
+  }
+  // todo: send chunks of 10 messages
+  if (messages.length > 0) {
+    ws.send(JSON.stringify({ type: "message", data: messages }));
   }
 }
-
-processStreamMessages().catch((err) => console.error(err));
 
 server.listen(process.argv[2] || 8080, () =>
   console.log("server on port 8080")
