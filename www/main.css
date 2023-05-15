@@ -102,11 +102,14 @@ section {
 }
 
 #messages {
+  /* background-attachment: fixed; */
+  /* background-size: cover; */
   background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-size: cover;
   height: 100vh;
   overflow-y: scroll;
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
 }
 
 .message_wrap {
@@ -115,26 +118,67 @@ section {
 
 .message_bubble {
   display: inline-block;
+  /* flex-direction: column; */
   text-align: left;
   background-color: #252016;
-  padding: 5px 10px;
   border-radius: 10px;
+  padding: 5px 10px;
+  position: relative;
+
   color: #efefef;
   word-break: break-all;
 }
+.fix {
+  display: inline-block;
+  width: 70px;
+  height: 15px;
+}
+/* .message_bubble:last-child {
+  text-align: end;
+} */
 .message {
   z-index: 10;
   padding: 9px 6px;
 }
-
 .message_right {
   /* text-align: right; */
   display: flex;
   justify-content: end;
 }
-
+.message_text {
+  display: inline;
+  width: fit-content;
+}
+/* .message_text::after {
+  content: "";
+  display: block;
+  width: 24px;
+  height: 12px;
+} */
+.message_info {
+  display: flex;
+  margin-left: auto;
+  width: fit-content;
+  position: absolute;
+  align-items: end;
+  bottom: 5px;
+  right: 10px;
+}
+.check {
+  display: flex;
+  align-items: end;
+  width: 20px;
+  height: 20px;
+  fill: #a3a3a3;
+  /* vertical-align: bottom; */
+}
 .message_right > .message_wrap {
   text-align: right;
+}
+.timestamp_sent {
+  padding: 0 1px 0 4px;
+  font-size: 11px;
+  color: #9b9b9b;
 }
 
 #msgForm {

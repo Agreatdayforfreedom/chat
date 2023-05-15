@@ -38,12 +38,23 @@ let rooms = {};
 
 // app.get("/", (req, res) => {});
 
-app.post("/login", (req, res) => {
-  const exists = users.find((user) => user === req.body.user);
-  if (exists) return res.send("User already exists");
+app.post("/login", async (req, res) => {
+  // i don't like this
+  try {
+    const exists = await db.get(`user:${req.body.user}`);
 
-  users.push(req.body.user);
-  return res.send(req.body);
+    if (exists) return res.json({ data: exists });
+  } catch (error) {
+    let data = {
+      name: req.body.user,
+      avatar: `https://secure.gravatar.com/avatar/${Math.floor(
+        Math.random() * 1000
+      )}?s=90&d=identicon`,
+      created_at: +new Date(),
+    };
+    await db.put(`user:${req.body.user}`, data);
+    return res.json(data);
+  }
 });
 
 app.get("/rooms", isAuthHttp, async (_req, res) => {
@@ -62,6 +73,8 @@ app.get("/rooms", isAuthHttp, async (_req, res) => {
   }
 });
 
+app.get("/messages/:room", isAuthHttp, processMessages);
+
 app.get("/users", async (_req, res) => {
   res.send(await redisClient.smembers("users"));
 });
@@ -78,34 +91,30 @@ wss.getUniqueID = function () {
 };
 wss.on("connection", async (ws, request) => {
   const users = await redisClient.smembers("users");
-
+  const auth_ws_client = request.headers["sec-websocket-protocol"];
   //todo: when tab is closed, the user status is not set to offline
   if (users) ws.send(JSON.stringify({ type: "users", data: users }));
   const val = isAuth(request, ws);
   if (!val) return; //maybe retrieve the current connections?
   broadcastConnection(request, ws, "online");
-
   ws.on("message", async (msg) => {
     const obj = JSON.parse(msg);
-
     const { type } = obj;
     switch (type) {
-      case "login":
-        login({ type, id: obj.id });
-        break;
       case "join":
         const room = obj["room"] ? obj.room : nanoid(); //todo: find existing room
         join(obj.from, obj.to, room, ws);
-        processStreamMessages(room, obj.from, ws).catch((err) =>
+        processStreamMessages(room, auth_ws_client, ws).catch((err) =>
           console.error(err)
         );
-
+        console.log("passed");
         break;
       case "leave":
         leave(params);
         break;
       case "message":
         const chat = Object.entries(rooms[obj.room]);
+        let date = +new Date();
         for (const [, sock] of chat) {
           // console.log(
           //   sock === ws,
@@ -118,6 +127,7 @@ wss.on("connection", async (ws, request) => {
                 JSON.stringify({
                   emitter: obj.emitter,
                   message: obj.id,
+                  sent: date,
                 }),
               ],
               room: obj.room,
@@ -131,7 +141,9 @@ wss.on("connection", async (ws, request) => {
             "message",
             obj.id,
             "emitter",
-            obj.emitter
+            obj.emitter,
+            "sent",
+            date
           );
           // processStreamMessages(obj.roomroom, obj.from, ws).catch();
         } catch (error) {
@@ -155,37 +167,35 @@ wss.on("connection", async (ws, request) => {
     .pipe(JSONStream.parse("*"))
     .on("data", (msg) => client.send(msg));
 });
-async function login(user) {
-  const exists = users.find((u) => u === user.content);
-  if (exists) {
-    broadcast(exists);
-  } else {
-    users.push(user.content);
-    broadcast(user);
-  }
-}
 async function join(from, to, room, client) {
+  console.log(from, to, room);
+
+  const user = await db.get(`user:${from}`);
+  //todo: attach info user to the room member
   for await (const roomdb of db.iterator({ gte: "room" })) {
     if (roomdb[0] === room) {
       if (!rooms[room]) rooms[room] = {};
-      if (rooms[room][from] === client) return;
+      if (!room[from]) rooms[room][from] = {};
+      if (rooms[room][from]["socket"] === client) return;
       if (rooms[room]) {
-        rooms[room][from] = client;
+        rooms[room][from]["socket"] = client;
       }
       return;
-    } //todo: push client disconnected
-    //todo: don't save the wsclient in the database
+    }
   }
-  // let members;
 
+  //open for first time a chat
   if (!rooms[room]) rooms[room] = {};
-  if (rooms[room][from] === client) return;
+  if (!room[from]) rooms[room][from] = {};
+  if (rooms[room][from]["socket"] === client) return;
   if (rooms[room]) {
-    rooms[room][from] = client;
-    rooms[room][to] = ""; // set second member as empty to validate later
+    rooms[room][from]["socket"] = client;
+    rooms[room][to] = {}; // set second member as empty to validate later
   }
-
-  await db.put(`room/${room}`, { member_1: from, member_2: to });
+  await db.put(`room:${room}`, {
+    member_1: { info: from, socket: "" },
+    member_2: { info: to, socket: "" },
+  });
 }
 
 function leave(ws) {}
@@ -241,35 +251,64 @@ function broadcast(msg) {
 }
 
 let lastRecordId = "$";
-
+//prettier-ignore
 async function processStreamMessages(stream, user, ws) {
   let messages = [];
 
-  const [[, records_chat]] = await redisClientXRead.xread(
-    "BLOCK",
-    0,
-    "STREAMS",
-    stream,
-    0
-  );
-
-  //todo: once saw, persist the history in the database
-  console.log(records_chat);
-  for (const [, data] of records_chat) {
-    var multi = data.reduce((a, c, i) => {
-      return i % 2 === 0 ? a.concat([data.slice(i, i + 2)]) : a;
-    }, []);
-    let toObj = Object.fromEntries(multi);
-    // console.log(toObj);
-    messages.push(JSON.stringify(toObj));
+  console.log('----------s')
+  try {
+    
+    
+    const [[, records_chat]] = await redisClientXRead.xread(
+      "STREAMS",
+      stream,
+      0
+    );
+    
+  if (records_chat.length > 0) for (const [id, data] of records_chat) {
+      var multi = data.reduce((a, c, i) => {
+        return i % 2 === 0 ? a.concat([data.slice(i, i + 2)]) : a;
+      }, []);
+      let obj = Object.fromEntries(multi);
+      
+      messages.push(JSON.stringify(obj));
+      console.log("pushed", user)
+      console.log(obj.emitter, user)
+      if(obj.emitter !== user) { // delete data when  recipient receives it
+        await Promise.all([
+          //room:dj921dh212dk:2dj19082jd-0 = {...data}
+          await db.put(`${stream}:${id}`, JSON.stringify(obj)),
+          await redisClientXRead.xdel(stream, id),
+        ]).catch(err=>console.log(err));
+      };
   }
-  // todo: send chunks of 10 messages
+} catch (error) {
+  console.log("managing error")
+  return
+}
+  
   if (messages.length > 0) {
+    console.log("sending queue to: "+user, messages);
     ws.send(JSON.stringify({ type: "message", data: messages }));
   }
 }
 
+async function processMessages(request, response) {
+  const { room } = request.params;
+  const messages = [];
+  let i = 1e9;
+  while (i > 0) {
+    i--;
+  }
+  // const messages = await db.iterator
+  for await (const [_, message] of db.iterator({ gt: `${room}:` })) {
+    messages.push(message);
+  }
+  console.log(messages, "db");
+  response.json({ type: "message", data: messages });
+}
+
+//idea: load
 server.listen(process.argv[2] || 8080, () =>
   console.log("server on port 8080")
 );
-function retrieveFrom() {} //todo: nothing

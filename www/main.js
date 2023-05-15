@@ -1,6 +1,9 @@
 import usersModal from "./users_modal.js";
 import { headers } from "./utils.js";
 let currentRoom = ""; //todo: save it somewhere else
+let background_chat_preload = new Image();
+let messages_in_queue = false;
+let cache_supported = "caches" in self;
 
 function genData(id, type, room = "") {
   let obj = {};
@@ -34,9 +37,9 @@ function genData(id, type, room = "") {
 let token = localStorage.getItem("login") ? localStorage.getItem("login") : 1;
 const ws = new WebSocket(`ws://${window.document.location.host}`, token);
 document.addEventListener("DOMContentLoaded", () => {
-  // drawUsers();
   drawRooms();
   usersModal();
+  background_chat_preload.src = "./image/background-chat.png"; //? preload
   const form = document.querySelector("#auth");
   const users_btn = document.querySelector("#users_wrap");
   if (localStorage.getItem("login")) {
@@ -60,15 +63,15 @@ document.addEventListener("DOMContentLoaded", () => {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const content = document.querySelector("#login").value;
-    const obj = genData(content, "login");
     // ws.send(obj);
-    const user = await login(content);
-    localStorage.setItem("auth", content);
+    await login(content);
+    // localStorage.setItem("auth", content);
     document.querySelector("#login").value = "";
   });
 });
 ws.onmessage = function (message) {
   let { type, data } = JSON.parse(message.data);
+  if (type === "message") messages_in_queue = true;
   if (Array.isArray(data)) {
     if (type === "users") {
       for (const o of data) {
@@ -77,36 +80,62 @@ ws.onmessage = function (message) {
       }
       return;
     }
-    drawMessages(data);
+    if (type === "message" && messages_in_queue) {
+      console.log("drawing from queue", data);
+      drawMessages(data);
+    }
   }
 };
 
-function drawMessages(obj, room) {
+function drawMessages(obj) {
   let state = document.querySelectorAll("#message");
   //scroll start at bottom
   let _user = localStorage.getItem("login");
-  console.log(room, currentRoom);
 
   for (const item of obj) {
-    const data = JSON.parse(item);
-    const msgDiv = document.createElement("div");
-    const msgWrap = document.createElement("div");
-    const msgContent = document.createElement("span");
-    msgDiv.id = "message";
-    msgDiv.classList.add("message");
-    msgWrap.classList.add("message_wrap");
+    try {
+      const data = JSON.parse(item);
+      const msgDiv = document.createElement("div");
+      const msgWrap = document.createElement("div");
+      const infoWrap = document.createElement("div");
+      const msgBubble = document.createElement("div");
+      // const msgCheck = document.createElement("span");
 
-    if (_user && _user === data.emitter) {
-      msgDiv.classList.add("message_right");
+      const fix = document.createElement("span");
+      const msgContent = document.createElement("span");
+      const msgDate = document.createElement("span");
+      msgDiv.id = "message";
+      msgDiv.classList.add("message");
+      msgWrap.classList.add("message_wrap");
+      msgBubble.classList.add("message_bubble");
+      infoWrap.classList.add("message_info");
+      fix.classList.add("fix");
+      msgContent.classList.add("message_text");
+      msgDate.classList.add("timestamp_sent");
+
+      msgContent.innerText = data.message;
+      if (data.sent) {
+        msgDate.innerText = moment(parseInt(data.sent)).format("LT");
+      }
+      // msgContent.classList.add("message_bubble");
+      msgDiv.appendChild(msgWrap);
+      msgWrap.appendChild(msgBubble);
+      msgBubble.appendChild(msgContent);
+      msgBubble.appendChild(fix);
+      msgBubble.appendChild(infoWrap);
+      infoWrap.appendChild(msgDate);
+      if (_user && _user === data.emitter) {
+        msgDiv.classList.add("message_right");
+        infoWrap.innerHTML += `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="check bi bi-check-all" viewBox="0 0 16 12"> <path d="M8.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L2.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093L8.95 4.992a.252.252 0 0 1 .02-.022zm-.92 5.14.92.92a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 1 0-1.091-1.028L9.477 9.417l-.485-.486-.943 1.179z"/> </svg>`;
+      }
+
+      // infoWrap.append(msgCheck);
+      document.getElementById("messages").appendChild(msgDiv);
+      let scroll = document.querySelector("#messages");
+      scroll.scrollTop = scroll.scrollHeight;
+    } catch (error) {
+      console.log(error);
     }
-
-    msgContent.innerHTML = data.message;
-    msgContent.classList.add("message_bubble");
-    msgDiv.appendChild(msgWrap);
-    msgWrap.appendChild(msgContent);
-    document.getElementById("messages").appendChild(msgDiv);
-    let scroll = document.querySelector("#messages");
-    scroll.scrollTop = scroll.scrollHeight;
   }
 }
 
@@ -126,28 +155,38 @@ form.addEventListener("submit", (event) => {
 /***
   lol
 */
-function openRoom(from, to, room = "") {
-  if (currentRoom === room) return;
+async function openRoom(from, to, room = "") {
   let state = document.querySelectorAll("#message");
 
-  if (room !== currentRoom) {
+  if (currentRoom === "" && room === "") {
+    let obj = { from, to, type: "join" };
+    ws.send(JSON.stringify(obj));
+  }
+  if (currentRoom === room) {
+    // currentRoom = room ? room : "";
+    return;
+  } else {
     for (const el of state) {
       el.remove();
     }
   }
-  document.querySelector(
-    "#messages"
-  ).style.background = `linear-gradient(rgba(22, 22, 22, 0.5), rgba(22, 22, 22, 0.5)),
-  url("./image/background.jpg")`;
+  let background = document.querySelector("#messages");
+  background.style.background = `linear-gradient(rgba(22, 22, 22, 0.5), rgba(123, 64, 21, 0.5)), url(${background_chat_preload.src})`;
   document.querySelector("#header_chat_name").innerHTML = to;
-  document.querySelector(
-    "#header_chat_picture"
-  ).src = `https://secure.gravatar.com/avatar/${Math.floor(
-    Math.random() * 1000
-  )}?s=90&d=identicon`;
+  // document.querySelector(
+  //   "#header_chat_picture"
+  // ).src = ``;
   let open = document.querySelector("#open_chat");
   open.style.display = "flex";
 
+  if (room && !messages_in_queue) {
+    const res = await getMessages(room);
+    const { type, data } = res;
+    console.log("drawing from db", data);
+    drawMessages(data); // todo: cache
+
+    //todo: validate if(cache) {return cache } else drawMessages(data);
+  }
   let obj = { from, to, type: "join", room };
   ws.send(JSON.stringify(obj));
   currentRoom = room ? room : "";
@@ -234,11 +273,29 @@ async function login(user) {
       user,
     }),
   })
-    .then((res) => res.json())
-    .then((data) => {
-      localStorage.setItem("login", data.user);
-      return data.user;
+    .then((res) => {
+      console.log(res);
+      return res.json();
+    })
+    .then(({ data }) => {
+      console.log(data);
+      if (data.name) {
+        localStorage.setItem("login", data.name);
+      }
+      return data;
     });
+}
+
+async function getMessages(room) {
+  return await fetch(`http://localhost:8080/messages/${room}`, {
+    method: "GET",
+    headers: {
+      ...headers,
+      authorization: localStorage.getItem("login"),
+    },
+  })
+    .then((response) => response.json())
+    .then((data) => data);
 }
 
 async function getRooms() {
