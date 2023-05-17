@@ -20,6 +20,7 @@ import { Level } from "level";
 import JSONStream from "JSONStream";
 import cors from "cors";
 import qs from "query-string";
+import { format } from "./helpers/queryToJson.js";
 
 import { isAuth, isAuthHttp } from "./auth.js";
 import createDbConnection from "./db.js";
@@ -69,33 +70,29 @@ app.post("/login", async (req, res) => {
 });
 
 app.get("/rooms", isAuthHttp, async (_req, res) => {
-  const all = await db.all(`SELECT * FROM rooms `);
-  console.log({ all });
-  res.json(all);
-
-  // try {
-  //   let roomsdb = {};
-  //   for await (const [key, value] of db.iterator({
-  //     lt: "u",
-  //   })) {
-  //     console.log(key);
-  //     for (const owner in value) {
-  //       // console.log(owner);
-  //       if (value[owner].info.name === _req.user) {
-  //         roomsdb[key] = value;
-  //       }
-  //     }
-  //   }
-  //   res.send(roomsdb);
-  // } catch (error) {
-  //   console.log("nO FIELDS", error);
-  // }
+  const all = await db.all(
+    `SELECT 
+          r.id AS id,
+          u.id AS member_1foreign_id,
+          u.name AS member_1_name,
+          u.avatar AS member_1_avatar,
+          u2.id AS member_2foreign_id,
+          u2.name AS member_2_name,
+          u2.avatar AS member_2_avatar
+          FROM rooms r 
+              LEFT JOIN users u ON u.id =r.member_1 
+              LEFT JOIN users u2 ON u2.id =r.member_2
+      `
+  );
+  let formatted = format(all);
+  res.json({ data: formatted });
 });
 
 app.get("/messages/:room", isAuthHttp, processMessages);
 
 app.get("/users", async (_req, res) => {
-  res.send(await redisClient.smembers("users"));
+  const users = await db.all("SELECT * FROM users");
+  res.send(users);
 });
 
 const wss = new WebSocketServer({ server });
@@ -126,7 +123,6 @@ wss.on("connection", async (ws, request) => {
         processStreamMessages(room, auth_ws_client, ws).catch((err) =>
           console.error(err)
         );
-        console.log("passed");
         break;
       case "leave":
         leave(params);
@@ -144,9 +140,9 @@ wss.on("connection", async (ws, request) => {
               type: "message",
               data: [
                 JSON.stringify({
-                  emitter: obj.emitter,
-                  message: obj.id,
-                  sent: date,
+                  emitter: obj.emitter.id,
+                  content: obj.content,
+                  created_at: date,
                 }),
               ],
               room: obj.room,
@@ -157,11 +153,11 @@ wss.on("connection", async (ws, request) => {
           redisClient.xadd(
             obj.room,
             "*",
-            "message",
-            obj.id,
+            "content",
+            obj.content,
             "emitter",
-            obj.emitter,
-            "sent",
+            obj.emitter.id,
+            "created_at",
             date
           );
           // processStreamMessages(obj.roomroom, obj.from, ws).catch();
@@ -180,45 +176,36 @@ wss.on("connection", async (ws, request) => {
     console.log(request.user + "disconnected");
     broadcastConnection(request, ws, "offline");
   });
-
-  superagent
-    .get("localhost:8090")
-    .pipe(JSONStream.parse("*"))
-    .on("data", (msg) => client.send(msg));
 });
 async function join(from, to, room, client) {
-  console.log(from, to, room);
-
   //todo: attach info user to the room member
-  const roomExists = await db.get(`SELECT * FROM room WHERE ID=?`, room);
-
+  const roomExists = await db.get(`SELECT * FROM rooms WHERE id=?`, room);
   if (roomExists) {
     if (!rooms[room]) rooms[room] = {};
     if (!rooms[room][from]) rooms[room][from] = {};
-    if (rooms[room][from]["socket"] === client) return;
+    if (rooms[room][from] === client) return;
     if (rooms[room]) {
-      // rooms[room][from]["info"]
-      rooms[room][from]["socket"] = client;
+      rooms[room][from] = client;
     }
     return;
   }
-  let query_info = `SELECT * FROM users WHERE ID=?`;
+  let query_info = `SELECT * FROM users WHERE id=?`;
   const member_1_info = await db.get(query_info, from);
   const member_2_info = await db.get(query_info, to);
-
   if (!member_1_info || !member_2_info) throw new Error("There was a error");
   //open for first time a chat
   if (!rooms[room]) rooms[room] = {};
   if (!room[from]) rooms[room][from] = {};
-  if (rooms[room][from]["socket"] === client) return;
+  if (rooms[room][from] === client) return;
   if (rooms[room]) {
-    rooms[room][from]["socket"] = client;
+    rooms[room][from] = client;
     rooms[room][to] = ""; // set second member as empty to validate later
   }
   await db.run(
-    `INSET INTO rooms(member_1, member_2) VALUES(?, ?)
+    `INSERT INTO rooms(member_1, member_2) VALUES(?, ?)
     `,
-    { member_1_info, member_2_info }
+    member_1_info.id,
+    member_2_info.id
   );
 }
 
@@ -279,7 +266,7 @@ let lastRecordId = "$";
 async function processStreamMessages(stream, user, ws) {
   let messages = [];
 
-  console.log('----------s')
+  // console.log('----------s')
   try {
     
     
@@ -288,7 +275,7 @@ async function processStreamMessages(stream, user, ws) {
       stream,
       0
     );
-    
+    console.log(records_chat)
   if (records_chat.length > 0) for (const [id, data] of records_chat) {
       var multi = data.reduce((a, c, i) => {
         return i % 2 === 0 ? a.concat([data.slice(i, i + 2)]) : a;
@@ -296,18 +283,20 @@ async function processStreamMessages(stream, user, ws) {
       let obj = Object.fromEntries(multi);
       
       messages.push(JSON.stringify(obj));
-      console.log("pushed", user)
       console.log(obj.emitter, user)
-      if(obj.emitter !== user) { // delete data when  recipient receives it
+      if(obj.emitter !== user) { 
+        console.log("inserting...")
         await Promise.all([
-          //room:dj921dh212dk:2dj19082jd-0 = {...data}
-          await db.put(`${stream}:${id}`, JSON.stringify(obj)),
+          await db.run(`
+            INSERT INTO messages(content, room, emitter, created_at)
+              VALUES (?, ?, ?, ?)
+          `, obj.content,stream, obj.emitter, +new Date),
           await redisClientXRead.xdel(stream, id),
         ]).catch(err=>console.log(err));
       };
   }
 } catch (error) {
-  console.log("managing error")
+  console.log(error)
   return
 }
   
@@ -319,19 +308,18 @@ async function processStreamMessages(stream, user, ws) {
 
 async function processMessages(request, response) {
   const { room } = request.params;
-  const messages = [];
   let i = 1e9;
   while (i > 0) {
     i--;
   }
   // const messages = await db.iterator
-  for await (const [_, message] of db.iterator({ gt: `${room}:` })) {
-    messages.push(message);
-  }
+  // for await (const [_, message] of db.iterator({ gt: `${room}:` })) {
+  //   messages.push(message);
+  // }
+  const messages = await db.all("SELECT * FROM messages");
   response.json({ type: "message", data: messages });
 }
 
-//idea: load
 server.listen(process.argv[2] || 8080, () =>
   console.log("server on port 8080")
 );

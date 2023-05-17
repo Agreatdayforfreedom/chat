@@ -74,8 +74,8 @@ export default function usersModal() {
         spinner.remove();
       }
       for (const user of users) {
-        let data = JSON.parse(user);
-        drawUsers(data.user, data.status);
+        // let data = JSON.parse(user);
+        drawUsers(user);
       }
     }
   }

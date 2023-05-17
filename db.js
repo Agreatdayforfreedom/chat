@@ -13,7 +13,7 @@ async function createDbConnection() {
 
   await db.run(
     `CREATE TABLE IF NOT EXISTS users (
-        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         name VARCHAR(32) NOT NULL,
         avatar VARCHAR(255) NOT NULL, 
         created_at INT NOT NULL
@@ -22,23 +22,23 @@ async function createDbConnection() {
 
   await db.run(
     `CREATE TABLE IF NOT EXISTS rooms (
-        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         member_1 INTEGER NOT NULL,
         member_2 INTEGER NOT NULL,
-        FOREIGN KEY(member_1) REFERENCES users(ID),
-        FOREIGN KEY(member_1) REFERENCES users(ID)
+        FOREIGN KEY(member_1) REFERENCES users(id),
+        FOREIGN KEY(member_1) REFERENCES users(id)
     )`
   );
 
   await db.run(
     `CREATE TABLE IF NOT EXISTS messages (
-        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         content VARCHAR(255) NOT NULL,
         room INTEGER NOT NULL,
         emitter INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
-        FOREIGN KEY(room) REFERENCES rooms(ID),
-        FOREIGN KEY(emitter) REFERENCES users(ID)
+        FOREIGN KEY(room) REFERENCES rooms(id),
+        FOREIGN KEY(emitter) REFERENCES users(id)
     )`
   );
 
@@ -47,7 +47,7 @@ async function createDbConnection() {
  `);
   const res = await db.get(
     `SELECT 
-        r.ID AS room_id,
+        r.id AS room_id,
         u.id AS member_1_id,
         u.name AS member_1_name,
         u.avatar AS member_1_avatar,
@@ -55,8 +55,8 @@ async function createDbConnection() {
         u2.name AS member_2_name,
         u2.avatar AS member_2_avatar
         FROM rooms r 
-            LEFT JOIN users u ON u.ID =r.member_1 
-            LEFT JOIN users u2 ON u2.ID =r.member_2
+            LEFT JOIN users u ON u.id =r.member_1 
+            LEFT JOIN users u2 ON u2.id =r.member_2
     `
   );
 

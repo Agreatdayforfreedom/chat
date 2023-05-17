@@ -34,7 +34,10 @@ function genData(id, type, room = "") {
   }
   return JSON.stringify(obj);
 }
-let token = localStorage.getItem("login") ? localStorage.getItem("login") : 1;
+const token = localStorage.getItem("login") ? localStorage.getItem("login") : 1;
+const userInfo = localStorage.getItem("user_info")
+  ? JSON.parse(localStorage.getItem("user_info"))
+  : {};
 const ws = new WebSocket(`ws://${window.document.location.host}`, token);
 document.addEventListener("DOMContentLoaded", () => {
   drawRooms();
@@ -42,6 +45,9 @@ document.addEventListener("DOMContentLoaded", () => {
   background_chat_preload.src = "./image/background-chat.png"; //? preload
   const form = document.querySelector("#auth");
   const users_btn = document.querySelector("#users_wrap");
+  const info_name = document.createElement("span");
+  info_name.innerText = userInfo.name;
+  document.querySelector("#section").appendChild(info_name);
   if (localStorage.getItem("login")) {
     form.remove();
     users_btn.style.display = "block";
@@ -71,30 +77,32 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 ws.onmessage = function (message) {
   let { type, data } = JSON.parse(message.data);
-  if (type === "message") messages_in_queue = true;
+  console.log(type, "TYPE");
+  // if (type === "message") {
+  //   messages_in_queue = true;
+  // }
   if (Array.isArray(data)) {
-    if (type === "users") {
-      for (const o of data) {
-        const el = JSON.parse(o);
-        if (el.type === "status") drawUsers(el.user, el.status);
-      }
-      return;
-    }
-    if (type === "message" && messages_in_queue) {
+    // if (type === "users") {
+    //   for (const o of data) {
+    //     const el = JSON.parse(o);
+    //     // if (el.type === "status") drawUsers(el.user, el.status);
+    //   }
+    //   return;
+    // }
+    if (type === "message") {
       console.log("drawing from queue", data);
+      console.log("should second ");
       drawMessages(data);
     }
   }
 };
 
 function drawMessages(obj) {
-  let state = document.querySelectorAll("#message");
   //scroll start at bottom
   let _user = localStorage.getItem("login");
-
   for (const item of obj) {
     try {
-      const data = JSON.parse(item);
+      let data = typeof item === "string" ? JSON.parse(item) : item;
       const msgDiv = document.createElement("div");
       const msgWrap = document.createElement("div");
       const infoWrap = document.createElement("div");
@@ -113,9 +121,9 @@ function drawMessages(obj) {
       msgContent.classList.add("message_text");
       msgDate.classList.add("timestamp_sent");
 
-      msgContent.innerText = data.message;
-      if (data.sent) {
-        msgDate.innerText = moment(parseInt(data.sent)).format("LT");
+      msgContent.innerText = data.content;
+      if (data.created_at) {
+        msgDate.innerText = moment(parseInt(data.created_at)).format("LT");
       }
       // msgContent.classList.add("message_bubble");
       msgDiv.appendChild(msgWrap);
@@ -124,7 +132,8 @@ function drawMessages(obj) {
       msgBubble.appendChild(fix);
       msgBubble.appendChild(infoWrap);
       infoWrap.appendChild(msgDate);
-      if (_user && _user === data.emitter) {
+      console.log(data.emitter === _user);
+      if (_user && _user === data.emitter.toString()) {
         msgDiv.classList.add("message_right");
         infoWrap.innerHTML += `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="check bi bi-check-all" viewBox="0 0 16 12"> <path d="M8.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L2.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093L8.95 4.992a.252.252 0 0 1 .02-.022zm-.92 5.14.92.92a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 1 0-1.091-1.028L9.477 9.417l-.485-.486-.943 1.179z"/> </svg>`;
       }
@@ -144,10 +153,10 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   const message = document.getElementById("msgBox").value;
   let obj = {
-    id: message,
+    content: message,
     type: "message",
-    room: currentRoom,
-    emitter: localStorage.getItem("login"),
+    room: currentRoom.id,
+    emitter: userInfo,
   };
   ws.send(JSON.stringify(obj));
   document.getElementById("msgBox").value = "";
@@ -157,9 +166,8 @@ form.addEventListener("submit", (event) => {
 */
 async function openRoom(from, to, room = "") {
   let state = document.querySelectorAll("#message");
-  //todo! try to repair room storage.
   if (currentRoom === "" && room === "") {
-    let obj = { from: from.info.name, to: to.info.name, type: "join" };
+    let obj = { from: from.id, to: to.id, type: "join" };
     ws.send(JSON.stringify(obj));
   }
   if (currentRoom === room) {
@@ -172,27 +180,30 @@ async function openRoom(from, to, room = "") {
   }
   let background = document.querySelector("#messages");
   background.style.background = `linear-gradient(rgba(22, 22, 22, 0.5), rgba(123, 64, 21, 0.5)), url(${background_chat_preload.src})`;
-  document.querySelector("#header_chat_name").innerHTML = to.info.name;
-  document.querySelector("#header_chat_picture").src = to.info.avatar;
+  document.querySelector("#header_chat_name").innerHTML = to.name;
+  document.querySelector("#header_chat_picture").src = to.avatar;
   let open = document.querySelector("#open_chat");
   open.style.display = "flex";
+  console.log({ from, to });
 
-  if (room && !messages_in_queue) {
+  if (room) {
     const res = await getMessages(room);
     const { type, data } = res;
     console.log("drawing from db", data);
-    drawMessages(data); // todo: cache
-
-    //todo: validate if(cache) {return cache } else drawMessages(data);
+    drawMessages(data);
+    console.log("should first ");
   }
-  let obj = { from: from.info.name, to: to.info.name, type: "join", room };
+
+  let obj = { from: from.id, to: to.id, type: "join", room: room.id };
   ws.send(JSON.stringify(obj));
   currentRoom = room ? room : "";
 }
-export function drawUsers(user, status) {
+export async function drawUsers(user) {
+  // const users = await getUsers();
+  console.log(user);
   // const { users } = await getUsers();
   // for (const user of users) {
-  const drawn = document.querySelector(`#${user}`);
+  const drawn = document.querySelector(`#${user.name}`);
   const wrap = document.createElement("div");
   const wrap_info = document.createElement("div");
   wrap_info.classList = "wrap_info";
@@ -202,22 +213,22 @@ export function drawUsers(user, status) {
 
   open.innerText = "open";
   open.classList = "btn_open_chat";
-  name.innerText = user;
+  name.innerText = user.name;
   name.classList = "user_name";
   wrap.classList = "user_card";
 
-  statusElement.id = user;
-  statusElement.innerText = status;
-  if (drawn) {
-    drawn.innerText = status;
-    if (status === "offline") {
-      drawn.classList = "user-disconnected";
-    } else drawn.classList = "user-connected";
-    return;
-  }
-  if (status === "offline") {
-    statusElement.classList.add("user-disconnected");
-  } else statusElement.classList.add("user-connected");
+  statusElement.id = user.id;
+  // statusElement.innerText = status;
+  // if (drawn) {
+  //   // drawn.innerText = status;
+  //   if (status === "offline") {
+  //     drawn.classList = "user-disconnected";
+  //   } else drawn.classList = "user-connected";
+  //   return;
+  // }
+  // if (status === "offline") {
+  //   statusElement.classList.add("user-disconnected");
+  // } else statusElement.classList.add("user-connected");
 
   wrap.appendChild(wrap_info);
   wrap_info.appendChild(name);
@@ -230,17 +241,16 @@ export function drawUsers(user, status) {
 
     open.addEventListener("click", (e) => {
       e.preventDefault();
-      openRoom(localStorage.getItem("login"), user);
+      openRoom(userInfo, user);
     });
   }
   // }
 }
 async function drawRooms() {
-  const rooms = await getRooms();
-  console.log(rooms);
-  for (const room in rooms) {
+  const { data } = await getRooms();
+  for (const room of data) {
+    console.log(room);
     //room[0] = room id, room[1] = members object
-    let data = rooms[room];
     let from;
     let to;
     const wrap = document.createElement("div");
@@ -248,29 +258,29 @@ async function drawRooms() {
     const img = document.createElement("img");
 
     wrap.classList = "room";
-    wrap.id = room;
-    // if(room[1].length)
-    for (const client in data) {
+    wrap.id = room.id;
+    for (const client in room) {
       if (
+        room[client] &&
         localStorage.getItem("login") &&
-        localStorage.getItem("login") !== data[client].info.name
+        parseInt(localStorage.getItem("login")) !== room[client].id
       ) {
-        to = data[client];
-        name.innerText = data[client].info.name;
+        to = room[client];
+        name.innerText = room[client].name;
         name.classList.add("name_user_card");
-        img.src = data[client].info.avatar;
-        img.alt = `${data[client].info.name} avatar`;
+        img.src = room[client].avatar;
+        img.alt = `${room[client].name} avatar`;
         img.classList.add("avatar_user_card");
       }
-      if (localStorage.getItem("login") === data[client].info.name)
-        from = data[client];
+      if (parseInt(localStorage.getItem("login")) === room[client].id)
+        from = room[client];
     }
     wrap.appendChild(img);
     wrap.appendChild(name);
     document.getElementById("rooms").appendChild(wrap);
-    console.log({ to, from });
     wrap.addEventListener("click", (e) => {
       e.preventDefault();
+      console.log({ from, to, room });
       openRoom(from, to, room);
     });
   }
@@ -293,7 +303,8 @@ async function login(user) {
     .then(({ data }) => {
       console.log(data);
       if (data.name) {
-        localStorage.setItem("login", data.name);
+        localStorage.setItem("login", data.id);
+        localStorage.setItem("user_info", JSON.stringify(data));
       }
       return data;
     });
