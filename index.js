@@ -11,7 +11,7 @@
 
 import { createServer } from "http";
 import staticHandler from "serve-handler";
-import express from "express";
+import express, { text } from "express";
 import ws, { WebSocketServer } from "ws";
 import superagent from "superagent";
 import { nanoid } from "nanoid";
@@ -20,7 +20,15 @@ import { Level } from "level";
 import JSONStream from "JSONStream";
 import cors from "cors";
 import qs from "query-string";
+
 import { isAuth, isAuthHttp } from "./auth.js";
+import createDbConnection from "./db.js";
+const db = await createDbConnection();
+
+// import sqlite3 from "sqlite3";
+// const filepath = "./chat.db";
+// const sqlite = sqlite3.verbose();
+// const db = new sqlite.Database(filepath);
 
 const redisClient = new Redis();
 const redisClientXRead = new Redis();
@@ -32,45 +40,56 @@ const server = createServer(app, (req, res) => {
 app.use(cors());
 app.use(express.json());
 app.use(express.static("www"));
-const db = new Level("chat", { valueEncoding: "json" });
+// const db = new Level("chat", { valueEncoding: "json" });
+
 let users = [];
 let rooms = {};
 
-// app.get("/", (req, res) => {});
-
 app.post("/login", async (req, res) => {
-  // i don't like this
-  try {
-    const exists = await db.get(`user:${req.body.user}`);
-
-    if (exists) return res.json({ data: exists });
-  } catch (error) {
-    let data = {
-      name: req.body.user,
-      avatar: `https://secure.gravatar.com/avatar/${Math.floor(
+  let exists = await db.get(`SELECT * FROM users WHERE name=?`, req.body.user);
+  if (exists) return res.json({ data: exists });
+  let result = await db.run(
+    `INSERT INTO users(name, avatar, created_at) VALUES(:name,:avatar,:created_at)`,
+    {
+      ":name": req.body.user,
+      ":avatar": `https://secure.gravatar.com/avatar/${Math.floor(
         Math.random() * 1000
       )}?s=90&d=identicon`,
-      created_at: +new Date(),
-    };
-    await db.put(`user:${req.body.user}`, data);
-    return res.json(data);
+      ":created_at": +new Date(),
+    }
+  );
+
+  if (result.lastID) {
+    const user = await db.get(
+      "SELECT * FROM users WHERE id = ?",
+      result.lastID
+    );
+    if (user) return res.json({ data: user });
   }
 });
 
 app.get("/rooms", isAuthHttp, async (_req, res) => {
-  try {
-    let roomsdb = {};
-    for await (const [key, value] of db.iterator({ gte: "room" })) {
-      for (const owner in value) {
-        if (value[owner] === _req.user) {
-          roomsdb[key] = value;
-        }
-      }
-    }
-    res.send(roomsdb);
-  } catch (error) {
-    console.log("nO FIELDS", error);
-  }
+  const all = await db.all(`SELECT * FROM rooms `);
+  console.log({ all });
+  res.json(all);
+
+  // try {
+  //   let roomsdb = {};
+  //   for await (const [key, value] of db.iterator({
+  //     lt: "u",
+  //   })) {
+  //     console.log(key);
+  //     for (const owner in value) {
+  //       // console.log(owner);
+  //       if (value[owner].info.name === _req.user) {
+  //         roomsdb[key] = value;
+  //       }
+  //     }
+  //   }
+  //   res.send(roomsdb);
+  // } catch (error) {
+  //   console.log("nO FIELDS", error);
+  // }
 });
 
 app.get("/messages/:room", isAuthHttp, processMessages);
@@ -170,32 +189,37 @@ wss.on("connection", async (ws, request) => {
 async function join(from, to, room, client) {
   console.log(from, to, room);
 
-  const user = await db.get(`user:${from}`);
   //todo: attach info user to the room member
-  for await (const roomdb of db.iterator({ gte: "room" })) {
-    if (roomdb[0] === room) {
-      if (!rooms[room]) rooms[room] = {};
-      if (!room[from]) rooms[room][from] = {};
-      if (rooms[room][from]["socket"] === client) return;
-      if (rooms[room]) {
-        rooms[room][from]["socket"] = client;
-      }
-      return;
-    }
-  }
+  const roomExists = await db.get(`SELECT * FROM room WHERE ID=?`, room);
 
+  if (roomExists) {
+    if (!rooms[room]) rooms[room] = {};
+    if (!rooms[room][from]) rooms[room][from] = {};
+    if (rooms[room][from]["socket"] === client) return;
+    if (rooms[room]) {
+      // rooms[room][from]["info"]
+      rooms[room][from]["socket"] = client;
+    }
+    return;
+  }
+  let query_info = `SELECT * FROM users WHERE ID=?`;
+  const member_1_info = await db.get(query_info, from);
+  const member_2_info = await db.get(query_info, to);
+
+  if (!member_1_info || !member_2_info) throw new Error("There was a error");
   //open for first time a chat
   if (!rooms[room]) rooms[room] = {};
   if (!room[from]) rooms[room][from] = {};
   if (rooms[room][from]["socket"] === client) return;
   if (rooms[room]) {
     rooms[room][from]["socket"] = client;
-    rooms[room][to] = {}; // set second member as empty to validate later
+    rooms[room][to] = ""; // set second member as empty to validate later
   }
-  await db.put(`room:${room}`, {
-    member_1: { info: from, socket: "" },
-    member_2: { info: to, socket: "" },
-  });
+  await db.run(
+    `INSET INTO rooms(member_1, member_2) VALUES(?, ?)
+    `,
+    { member_1_info, member_2_info }
+  );
 }
 
 function leave(ws) {}
@@ -304,7 +328,6 @@ async function processMessages(request, response) {
   for await (const [_, message] of db.iterator({ gt: `${room}:` })) {
     messages.push(message);
   }
-  console.log(messages, "db");
   response.json({ type: "message", data: messages });
 }
 

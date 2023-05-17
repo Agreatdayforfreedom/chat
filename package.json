@@ -21,6 +21,8 @@
     "nodemon": "^2.0.22",
     "query-string": "^8.1.0",
     "serve-handler": "^6.1.5",
+    "sqlite": "^4.2.0",
+    "sqlite3": "^5.1.6",
     "superagent": "^8.0.9",
     "ws": "^8.13.0"
   }

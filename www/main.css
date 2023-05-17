@@ -40,11 +40,22 @@ section {
   padding: 8px;
   color: #efefef;
   border-bottom: 1px solid #3f3f3f;
+  display: flex;
+  align-items: flex-start;
 }
 .room:hover {
   cursor: pointer;
   color: #ffffff;
   background-color: #473f2af8;
+}
+
+.name_user_card {
+  margin: 0 8px;
+}
+.avatar_user_card {
+  width: 48px;
+  height: 48px;
+  border-radius: 100%;
 }
 
 /*!chat */

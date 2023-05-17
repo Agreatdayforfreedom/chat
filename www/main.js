@@ -157,9 +157,9 @@ form.addEventListener("submit", (event) => {
 */
 async function openRoom(from, to, room = "") {
   let state = document.querySelectorAll("#message");
-
+  //todo! try to repair room storage.
   if (currentRoom === "" && room === "") {
-    let obj = { from, to, type: "join" };
+    let obj = { from: from.info.name, to: to.info.name, type: "join" };
     ws.send(JSON.stringify(obj));
   }
   if (currentRoom === room) {
@@ -172,10 +172,8 @@ async function openRoom(from, to, room = "") {
   }
   let background = document.querySelector("#messages");
   background.style.background = `linear-gradient(rgba(22, 22, 22, 0.5), rgba(123, 64, 21, 0.5)), url(${background_chat_preload.src})`;
-  document.querySelector("#header_chat_name").innerHTML = to;
-  // document.querySelector(
-  //   "#header_chat_picture"
-  // ).src = ``;
+  document.querySelector("#header_chat_name").innerHTML = to.info.name;
+  document.querySelector("#header_chat_picture").src = to.info.avatar;
   let open = document.querySelector("#open_chat");
   open.style.display = "flex";
 
@@ -187,7 +185,7 @@ async function openRoom(from, to, room = "") {
 
     //todo: validate if(cache) {return cache } else drawMessages(data);
   }
-  let obj = { from, to, type: "join", room };
+  let obj = { from: from.info.name, to: to.info.name, type: "join", room };
   ws.send(JSON.stringify(obj));
   currentRoom = room ? room : "";
 }
@@ -239,26 +237,41 @@ export function drawUsers(user, status) {
 }
 async function drawRooms() {
   const rooms = await getRooms();
-  for (const room of Object.entries(rooms)) {
+  console.log(rooms);
+  for (const room in rooms) {
     //room[0] = room id, room[1] = members object
-    let to = "";
+    let data = rooms[room];
+    let from;
+    let to;
     const wrap = document.createElement("div");
+    const name = document.createElement("span");
+    const img = document.createElement("img");
+
+    wrap.classList = "room";
+    wrap.id = room;
     // if(room[1].length)
-    for (const client in room[1]) {
+    for (const client in data) {
       if (
         localStorage.getItem("login") &&
-        localStorage.getItem("login") !== room[1][client]
+        localStorage.getItem("login") !== data[client].info.name
       ) {
-        to = room[1][client];
-        wrap.innerText = room[1][client];
+        to = data[client];
+        name.innerText = data[client].info.name;
+        name.classList.add("name_user_card");
+        img.src = data[client].info.avatar;
+        img.alt = `${data[client].info.name} avatar`;
+        img.classList.add("avatar_user_card");
       }
+      if (localStorage.getItem("login") === data[client].info.name)
+        from = data[client];
     }
-    wrap.classList = "room";
-    wrap.id = room[0];
+    wrap.appendChild(img);
+    wrap.appendChild(name);
     document.getElementById("rooms").appendChild(wrap);
+    console.log({ to, from });
     wrap.addEventListener("click", (e) => {
       e.preventDefault();
-      openRoom(localStorage.getItem("login"), to, room[0]);
+      openRoom(from, to, room);
     });
   }
 }
