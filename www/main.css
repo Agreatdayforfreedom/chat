@@ -19,6 +19,37 @@ input::placeholder {
   color: #efefef;
 }
 
+.welcome_bg {
+  width: 100%;
+  background: rgb(104, 72, 45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.welcome_bg > svg {
+  width: 46px;
+  height: 46px;
+}
+.welcome_text > p {
+  margin: 0;
+  color: #202020;
+}
+.welcome_text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.welcome_btn {
+  all: unset;
+  transition: all 0.4s linear;
+  color: rgb(16, 16, 92);
+  text-decoration: underline;
+}
+.welcome_btn:hover {
+  cursor: pointer;
+  color: #202020;
+}
+
 .main {
   display: flex;
 }
@@ -113,14 +144,10 @@ section {
 }
 
 #messages {
-  /* background-attachment: fixed; */
-  /* background-size: cover; */
   background-repeat: no-repeat;
   height: 100vh;
   overflow-y: scroll;
-  display: flex;
-  flex-direction: column;
-  justify-content: end;
+  display: grid;
 }
 
 .message_wrap {
@@ -148,8 +175,8 @@ section {
   text-align: end;
 } */
 .message {
-  z-index: 10;
   padding: 9px 6px;
+  align-self: flex-end;
 }
 .message_right {
   /* text-align: right; */

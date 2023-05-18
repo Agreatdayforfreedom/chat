@@ -1,4 +1,4 @@
-import { drawUsers } from "./main.js";
+import { drawUsers } from "./users.js";
 import { headers } from "./utils.js";
 async function loadUsers() {
   return await fetch("http://localhost:8080/users", {
@@ -13,13 +13,12 @@ async function loadUsers() {
     .then((data) => data);
 }
 
-export default function usersModal() {
+export default function usersModal(extern_open) {
   let open = false;
   let cache = false;
   //prettier-ignore
-  document
-      .querySelector("#btn_users")
-      .addEventListener("click", () => modal());
+  if(extern_open) modal()
+  document.querySelector("#btn_users").addEventListener("click", () => modal());
 
   async function modal() {
     if (open) {

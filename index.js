@@ -69,7 +69,8 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.get("/rooms", isAuthHttp, async (_req, res) => {
+app.get("/rooms", isAuthHttp, async (req, res) => {
+  console.log(req.user, "USEEEEEEEER");
   const all = await db.all(
     `SELECT 
           r.id AS id,
@@ -80,9 +81,11 @@ app.get("/rooms", isAuthHttp, async (_req, res) => {
           u2.name AS member_2_name,
           u2.avatar AS member_2_avatar
           FROM rooms r 
-              LEFT JOIN users u ON u.id =r.member_1 
-              LEFT JOIN users u2 ON u2.id =r.member_2
-      `
+          LEFT JOIN users u ON u.id =r.member_1 
+          LEFT JOIN users u2 ON u2.id =r.member_2
+          WHERE r.member_1 = :user OR r.member_2= :user
+      `,
+    { ":user": req.user }
   );
   let formatted = format(all);
   res.json({ data: formatted });
@@ -115,6 +118,7 @@ wss.on("connection", async (ws, request) => {
   broadcastConnection(request, ws, "online");
   ws.on("message", async (msg) => {
     const obj = JSON.parse(msg);
+    console.log(obj);
     const { type } = obj;
     switch (type) {
       case "join":
@@ -130,6 +134,7 @@ wss.on("connection", async (ws, request) => {
       case "message":
         const chat = Object.entries(rooms[obj.room]);
         let date = +new Date();
+        console.log(chat);
         for (const [, sock] of chat) {
           // console.log(
           //   sock === ws,
@@ -140,7 +145,7 @@ wss.on("connection", async (ws, request) => {
               type: "message",
               data: [
                 JSON.stringify({
-                  emitter: obj.emitter.id,
+                  emitter: obj.emitter,
                   content: obj.content,
                   created_at: date,
                 }),
@@ -156,7 +161,7 @@ wss.on("connection", async (ws, request) => {
             "content",
             obj.content,
             "emitter",
-            obj.emitter.id,
+            obj.emitter,
             "created_at",
             date
           );
@@ -179,6 +184,8 @@ wss.on("connection", async (ws, request) => {
 });
 async function join(from, to, room, client) {
   //todo: attach info user to the room member
+  console.log("joining", from, to, room);
+
   const roomExists = await db.get(`SELECT * FROM rooms WHERE id=?`, room);
   if (roomExists) {
     if (!rooms[room]) rooms[room] = {};
@@ -308,15 +315,11 @@ async function processStreamMessages(stream, user, ws) {
 
 async function processMessages(request, response) {
   const { room } = request.params;
-  let i = 1e9;
-  while (i > 0) {
-    i--;
-  }
-  // const messages = await db.iterator
-  // for await (const [_, message] of db.iterator({ gt: `${room}:` })) {
-  //   messages.push(message);
-  // }
-  const messages = await db.all("SELECT * FROM messages");
+  const messages = await db.all(
+    "SELECT * FROM messages WHERE room=?",
+    parseInt(room)
+  );
+  console.log(messages);
   response.json({ type: "message", data: messages });
 }
 

@@ -1,53 +1,47 @@
 import usersModal from "./users_modal.js";
 import { headers } from "./utils.js";
-let currentRoom = ""; //todo: save it somewhere else
-let background_chat_preload = new Image();
-let messages_in_queue = false;
-let cache_supported = "caches" in self;
+import { drawRooms, openRoom } from "./rooms.js";
 
-function genData(id, type, room = "") {
-  let obj = {};
-  // let auth = localStorage.getItem("auth");
-  switch (type) {
-    case "login":
-      obj = {
-        type,
-        id: id,
-      };
-      break;
-    case "join":
-      obj = {
-        type,
-        id,
-        room,
-      };
-      break;
-    case "message":
-      obj = {
-        type,
-        id: id,
-        room,
-      };
-      break;
-    default:
-      throw new Error("unknow type:" + type);
-  }
-  return JSON.stringify(obj);
-}
+export let background_chat_preload = new Image();
+
 const token = localStorage.getItem("login") ? localStorage.getItem("login") : 1;
 const userInfo = localStorage.getItem("user_info")
   ? JSON.parse(localStorage.getItem("user_info"))
   : {};
-const ws = new WebSocket(`ws://${window.document.location.host}`, token);
+export const ws = new WebSocket(`ws://${window.document.location.host}`, token);
+sessionStorage.setItem("cr", undefined);
 document.addEventListener("DOMContentLoaded", () => {
+  console.log("after");
+  background_chat_preload.src = "./image/background-chat.png"; //* preload
+
+  header();
   drawRooms();
   usersModal();
-  background_chat_preload.src = "./image/background-chat.png"; //? preload
-  const form = document.querySelector("#auth");
-  const users_btn = document.querySelector("#users_wrap");
+
   const info_name = document.createElement("span");
   info_name.innerText = userInfo.name;
   document.querySelector("#section").appendChild(info_name);
+
+  //open users modal from welcome page
+  document.querySelector("#welcome_btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    usersModal(true);
+  });
+});
+ws.onmessage = function (message) {
+  let { type, data } = JSON.parse(message.data);
+  if (Array.isArray(data)) {
+    if (type === "message") {
+      console.log("drawing from queue", data);
+      console.log("should second ");
+      drawMessages(data);
+    }
+  }
+};
+
+function header() {
+  const form = document.querySelector("#auth");
+  const users_btn = document.querySelector("#users_wrap");
   if (localStorage.getItem("login")) {
     form.remove();
     users_btn.style.display = "block";
@@ -55,14 +49,17 @@ document.addEventListener("DOMContentLoaded", () => {
     form.style.display = "flex";
     users_btn.remove();
   }
+
   const input = document.createElement("input");
+  const btn = document.createElement("button");
+
   input.id = "login";
   input.classList = "login_input";
   input.placeholder = "Login...";
-  const btn = document.createElement("button");
   btn.type = "submit";
   btn.classList = "login_btn";
   btn.textContent = "Login";
+
   form.appendChild(input);
   form.appendChild(btn);
 
@@ -74,30 +71,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // localStorage.setItem("auth", content);
     document.querySelector("#login").value = "";
   });
-});
-ws.onmessage = function (message) {
-  let { type, data } = JSON.parse(message.data);
-  console.log(type, "TYPE");
-  // if (type === "message") {
-  //   messages_in_queue = true;
-  // }
-  if (Array.isArray(data)) {
-    // if (type === "users") {
-    //   for (const o of data) {
-    //     const el = JSON.parse(o);
-    //     // if (el.type === "status") drawUsers(el.user, el.status);
-    //   }
-    //   return;
-    // }
-    if (type === "message") {
-      console.log("drawing from queue", data);
-      console.log("should second ");
-      drawMessages(data);
-    }
-  }
-};
+}
 
-function drawMessages(obj) {
+export function drawMessages(obj) {
   //scroll start at bottom
   let _user = localStorage.getItem("login");
   for (const item of obj) {
@@ -148,146 +124,6 @@ function drawMessages(obj) {
   }
 }
 
-const form = document.getElementById("msgForm");
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const message = document.getElementById("msgBox").value;
-  let obj = {
-    content: message,
-    type: "message",
-    room: currentRoom.id,
-    emitter: userInfo,
-  };
-  ws.send(JSON.stringify(obj));
-  document.getElementById("msgBox").value = "";
-});
-/***
-  lol
-*/
-async function openRoom(from, to, room = "") {
-  let state = document.querySelectorAll("#message");
-  if (currentRoom === "" && room === "") {
-    let obj = { from: from.id, to: to.id, type: "join" };
-    ws.send(JSON.stringify(obj));
-  }
-  if (currentRoom === room) {
-    // currentRoom = room ? room : "";
-    return;
-  } else {
-    for (const el of state) {
-      el.remove();
-    }
-  }
-  let background = document.querySelector("#messages");
-  background.style.background = `linear-gradient(rgba(22, 22, 22, 0.5), rgba(123, 64, 21, 0.5)), url(${background_chat_preload.src})`;
-  document.querySelector("#header_chat_name").innerHTML = to.name;
-  document.querySelector("#header_chat_picture").src = to.avatar;
-  let open = document.querySelector("#open_chat");
-  open.style.display = "flex";
-  console.log({ from, to });
-
-  if (room) {
-    const res = await getMessages(room);
-    const { type, data } = res;
-    console.log("drawing from db", data);
-    drawMessages(data);
-    console.log("should first ");
-  }
-
-  let obj = { from: from.id, to: to.id, type: "join", room: room.id };
-  ws.send(JSON.stringify(obj));
-  currentRoom = room ? room : "";
-}
-export async function drawUsers(user) {
-  // const users = await getUsers();
-  console.log(user);
-  // const { users } = await getUsers();
-  // for (const user of users) {
-  const drawn = document.querySelector(`#${user.name}`);
-  const wrap = document.createElement("div");
-  const wrap_info = document.createElement("div");
-  wrap_info.classList = "wrap_info";
-  const name = document.createElement("h3");
-  const statusElement = document.createElement("span");
-  const open = document.createElement("button");
-
-  open.innerText = "open";
-  open.classList = "btn_open_chat";
-  name.innerText = user.name;
-  name.classList = "user_name";
-  wrap.classList = "user_card";
-
-  statusElement.id = user.id;
-  // statusElement.innerText = status;
-  // if (drawn) {
-  //   // drawn.innerText = status;
-  //   if (status === "offline") {
-  //     drawn.classList = "user-disconnected";
-  //   } else drawn.classList = "user-connected";
-  //   return;
-  // }
-  // if (status === "offline") {
-  //   statusElement.classList.add("user-disconnected");
-  // } else statusElement.classList.add("user-connected");
-
-  wrap.appendChild(wrap_info);
-  wrap_info.appendChild(name);
-  wrap_info.appendChild(statusElement);
-  wrap.appendChild(open);
-
-  const modal = document.getElementById("user_cards");
-  if (modal) {
-    modal.appendChild(wrap);
-
-    open.addEventListener("click", (e) => {
-      e.preventDefault();
-      openRoom(userInfo, user);
-    });
-  }
-  // }
-}
-async function drawRooms() {
-  const { data } = await getRooms();
-  for (const room of data) {
-    console.log(room);
-    //room[0] = room id, room[1] = members object
-    let from;
-    let to;
-    const wrap = document.createElement("div");
-    const name = document.createElement("span");
-    const img = document.createElement("img");
-
-    wrap.classList = "room";
-    wrap.id = room.id;
-    for (const client in room) {
-      if (
-        room[client] &&
-        localStorage.getItem("login") &&
-        parseInt(localStorage.getItem("login")) !== room[client].id
-      ) {
-        to = room[client];
-        name.innerText = room[client].name;
-        name.classList.add("name_user_card");
-        img.src = room[client].avatar;
-        img.alt = `${room[client].name} avatar`;
-        img.classList.add("avatar_user_card");
-      }
-      if (parseInt(localStorage.getItem("login")) === room[client].id)
-        from = room[client];
-    }
-    wrap.appendChild(img);
-    wrap.appendChild(name);
-    document.getElementById("rooms").appendChild(wrap);
-    wrap.addEventListener("click", (e) => {
-      e.preventDefault();
-      console.log({ from, to, room });
-      openRoom(from, to, room);
-    });
-  }
-}
-
-//*http
-
 async function login(user) {
   return await fetch("http://localhost:8080/login", {
     method: "POST",
@@ -308,34 +144,4 @@ async function login(user) {
       }
       return data;
     });
-}
-
-async function getMessages(room) {
-  return await fetch(`http://localhost:8080/messages/${room}`, {
-    method: "GET",
-    headers: {
-      ...headers,
-      authorization: localStorage.getItem("login"),
-    },
-  })
-    .then((response) => response.json())
-    .then((data) => data);
-}
-
-async function getRooms() {
-  return await fetch("http://localhost:8080/rooms", {
-    method: "GET",
-    headers: {
-      ...headers,
-      authorization: localStorage.getItem("login"),
-    },
-  })
-    .then((response) => response.json())
-    .then((data) => data);
-}
-
-async function getUsers() {
-  return await fetch("http://localhost:8080/users", { method: "GET", headers })
-    .then((response) => response.json())
-    .then((data) => data);
 }
