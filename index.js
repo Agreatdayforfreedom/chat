@@ -272,27 +272,19 @@ let lastRecordId = "$";
 //prettier-ignore
 async function processStreamMessages(stream, user, ws) {
   let messages = [];
-
-  // console.log('----------s')
   try {
-    
-    
     const [[, records_chat]] = await redisClientXRead.xread(
       "STREAMS",
       stream,
       0
     );
-    console.log(records_chat)
   if (records_chat.length > 0) for (const [id, data] of records_chat) {
       var multi = data.reduce((a, c, i) => {
         return i % 2 === 0 ? a.concat([data.slice(i, i + 2)]) : a;
       }, []);
       let obj = Object.fromEntries(multi);
-      
       messages.push(JSON.stringify(obj));
-      console.log(obj.emitter, user)
       if(obj.emitter !== user) { 
-        console.log("inserting...")
         await Promise.all([
           await db.run(`
             INSERT INTO messages(content, room, emitter, created_at)
@@ -309,7 +301,7 @@ async function processStreamMessages(stream, user, ws) {
   
   if (messages.length > 0) {
     console.log("sending queue to: "+user, messages);
-    ws.send(JSON.stringify({ type: "message", data: messages }));
+    ws.send(JSON.stringify({ type: "stream", data: messages }));
   }
 }
 

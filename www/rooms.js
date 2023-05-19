@@ -104,9 +104,9 @@ function sendMessage(room) {
   const id = localStorage.getItem("login");
   const form = document.getElementById("msgForm");
   form.addEventListener("submit", (event) => {
-    console.log("sending", room);
     event.preventDefault();
     const message = document.getElementById("msgBox").value;
+    if (message === "") return;
     let obj = {
       content: message,
       type: "message",

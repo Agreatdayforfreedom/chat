@@ -31,9 +31,24 @@ document.addEventListener("DOMContentLoaded", () => {
 ws.onmessage = function (message) {
   let { type, data } = JSON.parse(message.data);
   if (Array.isArray(data)) {
-    if (type === "message") {
-      console.log("drawing from queue", data);
-      console.log("should second ");
+    if (type === "message" || type === "stream") {
+      if (type === "stream") {
+        const div = document.createElement("div");
+        const div2 = document.createElement("div");
+        const total = document.createElement("span"); //total unread messages
+        const span = document.createElement("span");
+
+        div.classList = "new_messages_wrap";
+
+        div.id = "new_messages_wrap";
+
+        span.innerText = "Unread messages.";
+        total.innerText = data.length;
+        div.appendChild(div2);
+        div2.appendChild(total);
+        div2.appendChild(span);
+        document.querySelector("#messages").appendChild(div);
+      }
       drawMessages(data);
     }
   }
