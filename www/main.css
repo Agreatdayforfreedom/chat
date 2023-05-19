@@ -133,6 +133,9 @@ section {
   color: #efefef;
   transition: all 0.2s linear;
 }
+.no_auth_alert {
+  color: rgb(78, 25, 25);
+}
 
 .login_btn:hover {
   background-color: #52462f;
@@ -149,11 +152,12 @@ section {
   overflow-y: scroll;
   display: flex;
   flex-direction: column;
-  /* grid-auto-rows: max-content; */
   align-content: flex-end;
   grid-template-rows: minmax(250px, 1fr) minmax(250px, 1fr);
 }
-
+.msg_seen {
+  fill: rgb(56, 185, 194) !important;
+}
 .message_wrap {
   width: 65%;
   min-width: 0;
@@ -176,10 +180,6 @@ section {
   width: 70px;
   height: 15px;
 }
-/* .message_bubble:last-child {
-  text-align: end;
-} */
-
 .new_messages_wrap,
 .new_messages_wrap > div {
   display: flex;
@@ -210,12 +210,6 @@ section {
   display: inline;
   width: fit-content;
 }
-/* .message_text::after {
-  content: "";
-  display: block;
-  width: 24px;
-  height: 12px;
-} */
 .message_info {
   display: flex;
   margin-left: auto;
@@ -231,7 +225,6 @@ section {
   width: 20px;
   height: 20px;
   fill: #a3a3a3;
-  /* vertical-align: bottom; */
 }
 .message_right > .message_wrap {
   text-align: right;

@@ -6,7 +6,7 @@ export function isAuthHttp(req, res, next) {
 }
 
 export function isAuth(req, ws) {
-  if (req.headers["sec-websocket-protocol"] === "") {
+  if (req.headers["sec-websocket-protocol"] === "invalid") {
     ws.send("you are no authenticated");
     return false;
   } else {

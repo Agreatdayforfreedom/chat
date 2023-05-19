@@ -124,8 +124,8 @@ wss.on("connection", async (ws, request) => {
       case "join":
         const room = obj["room"] ? obj.room : nanoid(); //todo: find existing room
         join(obj.from, obj.to, room, ws);
-        processStreamMessages(room, auth_ws_client, ws).catch((err) =>
-          console.error(err)
+        processStreamMessages(room, auth_ws_client, rooms[room], ws).catch(
+          (err) => console.error(err)
         );
         break;
       case "leave":
@@ -134,15 +134,17 @@ wss.on("connection", async (ws, request) => {
       case "message":
         const chat = Object.entries(rooms[obj.room]);
         let date = +new Date();
+        //if the recipient is listening messages, send read as true and does not push the message to the stream
+        let read = false;
+        if (chat.length === 2) read = true; //recipient connected
         console.log(chat);
-        for (const [, sock] of chat) {
-          // console.log(
-          //   sock === ws,
-          //   "-----------------------------------------------------------------------------"
-          // );
+        for (const [user, sock] of chat) {
+          console.log(user);
+          //todo: save message read in db
           sock.send(
             JSON.stringify({
               type: "message",
+              read,
               data: [
                 JSON.stringify({
                   emitter: obj.emitter,
@@ -154,6 +156,7 @@ wss.on("connection", async (ws, request) => {
             })
           );
         }
+        if (read) return; // do not push the message to the stream
         try {
           redisClient.xadd(
             obj.room,
@@ -180,6 +183,7 @@ wss.on("connection", async (ws, request) => {
   ws.on("close", () => {
     console.log(request.user + "disconnected");
     broadcastConnection(request, ws, "offline");
+    leave(ws, auth_ws_client);
   });
 });
 async function join(from, to, room, client) {
@@ -216,7 +220,14 @@ async function join(from, to, room, client) {
   );
 }
 
-function leave(ws) {}
+function leave(ws, auth_ws_client) {
+  for (const room in rooms) {
+    if (rooms[room][auth_ws_client] && rooms[room][auth_ws_client] === ws) {
+      rooms[room][auth_ws_client] = "";
+    }
+    console.log(rooms[room], "ROOMS");
+  }
+}
 async function broadcastConnection(req, wsclient, status) {
   if (status === "online") {
     Promise.all([
@@ -270,7 +281,7 @@ function broadcast(msg) {
 
 let lastRecordId = "$";
 //prettier-ignore
-async function processStreamMessages(stream, user, ws) {
+async function processStreamMessages(stream, user, room, ws) {
   let messages = [];
   try {
     const [[, records_chat]] = await redisClientXRead.xread(
@@ -285,23 +296,28 @@ async function processStreamMessages(stream, user, ws) {
       let obj = Object.fromEntries(multi);
       messages.push(JSON.stringify(obj));
       if(obj.emitter !== user) { 
-        await Promise.all([
+      // persist all read messages 
+        Promise.all([
           await db.run(`
             INSERT INTO messages(content, room, emitter, created_at)
               VALUES (?, ?, ?, ?)
           `, obj.content,stream, obj.emitter, +new Date),
           await redisClientXRead.xdel(stream, id),
         ]).catch(err=>console.log(err));
+        // console.log({insert})
+        room[obj.emitter].send(JSON.stringify({read: true})) 
       };
+      // console.log(, "READ")
+      
   }
 } catch (error) {
   console.log(error)
   return
 }
-  
-  if (messages.length > 0) {
-    console.log("sending queue to: "+user, messages);
-    ws.send(JSON.stringify({ type: "stream", data: messages }));
+    if (messages.length > 0) {
+      console.log(messages)
+      console.log("sending queue to: "+user, messages);
+      ws.send(JSON.stringify({ type: "stream", data: messages }));
   }
 }
 
@@ -311,8 +327,7 @@ async function processMessages(request, response) {
     "SELECT * FROM messages WHERE room=?",
     parseInt(room)
   );
-  console.log(messages);
-  response.json({ type: "message", data: messages });
+  response.json({ type: "persistent", data: messages });
 }
 
 server.listen(process.argv[2] || 8080, () =>

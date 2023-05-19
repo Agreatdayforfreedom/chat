@@ -18,7 +18,8 @@ export default function usersModal(extern_open) {
   let cache = false;
   //prettier-ignore
   if(extern_open) modal()
-  document.querySelector("#btn_users").addEventListener("click", () => modal());
+  const btn_users = document.querySelector("#btn_users");
+  if (btn_users) btn_users.addEventListener("click", () => modal());
 
   async function modal() {
     if (open) {

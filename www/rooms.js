@@ -55,7 +55,7 @@ export async function openRoom(from, to, room = "") {
   if (room) {
     const res = await getMessages(room.id);
     const { type, data } = res;
-    drawMessages(data);
+    drawMessages(data, null, type);
     sessionStorage.setItem("cr", room.id);
     let obj = { from: from.id, to: to.id, type: "join", room: room.id };
     ws.send(JSON.stringify(obj));

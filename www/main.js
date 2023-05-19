@@ -4,14 +4,15 @@ import { drawRooms, openRoom } from "./rooms.js";
 
 export let background_chat_preload = new Image();
 
-const token = localStorage.getItem("login") ? localStorage.getItem("login") : 1;
+const token = localStorage.getItem("login")
+  ? localStorage.getItem("login")
+  : "invalid";
 const userInfo = localStorage.getItem("user_info")
   ? JSON.parse(localStorage.getItem("user_info"))
   : {};
 export const ws = new WebSocket(`ws://${window.document.location.host}`, token);
 sessionStorage.setItem("cr", undefined);
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("after");
   background_chat_preload.src = "./image/background-chat.png"; //* preload
 
   header();
@@ -25,14 +26,25 @@ document.addEventListener("DOMContentLoaded", () => {
   //open users modal from welcome page
   document.querySelector("#welcome_btn").addEventListener("click", (e) => {
     e.preventDefault();
-    usersModal(true);
+    if (token === "invalid") {
+      const span = document.createElement("span");
+      span.innerText = "Log in and start chatting with your friends";
+      span.id = "no_auth_alert";
+      span.classList = "no_auth_alert";
+      setTimeout(() => {
+        span.remove();
+      }, 2000);
+      document.querySelector(".welcome_text").appendChild(span);
+    } else usersModal(true);
   });
 });
 ws.onmessage = function (message) {
-  let { type, data } = JSON.parse(message.data);
+  let { type, read, data } = JSON.parse(message.data);
+  console.log({ type, read, data });
   if (Array.isArray(data)) {
     if (type === "message" || type === "stream") {
-      if (type === "stream") {
+      // console.log(JSON.parse(data));
+      if (type === "stream" && JSON.parse(data[0]).emitter !== token) {
         const div = document.createElement("div");
         const div2 = document.createElement("div");
         const total = document.createElement("span"); //total unread messages
@@ -49,8 +61,16 @@ ws.onmessage = function (message) {
         div2.appendChild(span);
         document.querySelector("#messages").appendChild(div);
       }
-      drawMessages(data);
+      drawMessages(data, read);
     }
+  }
+  if (!type && read && !data) {
+    const no_seen_messages = document.querySelectorAll("#check");
+    if (no_seen_messages.length > 0)
+      for (const el of no_seen_messages) {
+        if (el.classList.contains("msg_seen")) return;
+        el.classList.add("msg_seen");
+      }
   }
 };
 
@@ -88,7 +108,7 @@ function header() {
   });
 }
 
-export function drawMessages(obj) {
+export function drawMessages(obj, read, type = "") {
   //scroll start at bottom
   let _user = localStorage.getItem("login");
   for (const item of obj) {
@@ -98,7 +118,6 @@ export function drawMessages(obj) {
       const msgWrap = document.createElement("div");
       const infoWrap = document.createElement("div");
       const msgBubble = document.createElement("div");
-      // const msgCheck = document.createElement("span");
 
       const fix = document.createElement("span");
       const msgContent = document.createElement("span");
@@ -116,7 +135,7 @@ export function drawMessages(obj) {
       if (data.created_at) {
         msgDate.innerText = moment(parseInt(data.created_at)).format("LT");
       }
-      // msgContent.classList.add("message_bubble");
+
       msgDiv.appendChild(msgWrap);
       msgWrap.appendChild(msgBubble);
       msgBubble.appendChild(msgContent);
@@ -126,7 +145,12 @@ export function drawMessages(obj) {
       console.log(data.emitter === _user);
       if (_user && _user === data.emitter.toString()) {
         msgDiv.classList.add("message_right");
-        infoWrap.innerHTML += `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="check bi bi-check-all" viewBox="0 0 16 12"> <path d="M8.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L2.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093L8.95 4.992a.252.252 0 0 1 .02-.022zm-.92 5.14.92.92a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 1 0-1.091-1.028L9.477 9.417l-.485-.486-.943 1.179z"/> </svg>`;
+        infoWrap.innerHTML += `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" id="check" fill="currentColor" class="check bi bi-check-all" viewBox="0 0 16 12"> <path d="M8.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L2.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093L8.95 4.992a.252.252 0 0 1 .02-.022zm-.92 5.14.92.92a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 1 0-1.091-1.028L9.477 9.417l-.485-.486-.943 1.179z"/> </svg>`;
+      }
+
+      if (type === "persistent" || read) {
+        let check = infoWrap.lastChild;
+        if (check) check.classList.add("msg_seen");
       }
 
       // infoWrap.append(msgCheck);
