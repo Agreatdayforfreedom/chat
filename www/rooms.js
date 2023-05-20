@@ -32,10 +32,7 @@ export async function openRoom(from, to, room = "") {
   );
   let state = document.querySelectorAll("#message");
   if (!currentRoom && room === "") {
-    console.log("joining");
-
     let obj = { from: from.id, to: to.id, type: "join" };
-    console.log(obj, from.id);
     ws.send(JSON.stringify(obj));
   }
   if (currentRoom === room.id) {
@@ -65,7 +62,6 @@ export async function openRoom(from, to, room = "") {
 export async function drawRooms() {
   const { data } = await getRooms();
   for (const room of data) {
-    console.log(room);
     let from;
     let to;
     const wrap = document.createElement("div");

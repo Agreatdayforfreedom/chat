@@ -2,7 +2,6 @@ import { openRoom } from "./rooms.js";
 
 export async function drawUsers(user) {
   const userInfo = localStorage.getItem("user_info");
-  console.log(userInfo, "INFO");
   const wrap = document.createElement("div");
   const wrap_info = document.createElement("div");
   wrap_info.classList = "wrap_info";

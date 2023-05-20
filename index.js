@@ -135,7 +135,6 @@ wss.on("connection", async (ws, request) => {
         let read = false;
         if (chat.length === 2) read = true; //recipient connected
         for (const [user, sock] of chat) {
-          console.log(user, "users");
           //todo: save message read in db
           sock.send(
             JSON.stringify({
@@ -257,10 +256,8 @@ async function processStreamMessages(stream, user, room, ws) {
           `, obj.content,stream, obj.emitter, +new Date),
           await redisClientXRead.xdel(stream, id),
         ]).catch(err=>console.log(err));
-        // console.log({insert})
         room[obj.emitter].send(JSON.stringify({read: true})) 
       };
-      // console.log(, "READ")
       
   }
 } catch (error) {
