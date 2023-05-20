@@ -1,35 +1,15 @@
-/**
- * obj = {
- *  room: {}
- * }
- *
- *
- *
- *
- *
- */
-
 import { createServer } from "http";
 import staticHandler from "serve-handler";
-import express, { text } from "express";
+import express from "express";
 import ws, { WebSocketServer } from "ws";
-import superagent from "superagent";
 import { nanoid } from "nanoid";
 import Redis from "ioredis";
-import { Level } from "level";
-import JSONStream from "JSONStream";
 import cors from "cors";
-import qs from "query-string";
 import { format } from "./helpers/queryToJson.js";
 
 import { isAuth, isAuthHttp } from "./auth.js";
 import createDbConnection from "./db.js";
 const db = await createDbConnection();
-
-// import sqlite3 from "sqlite3";
-// const filepath = "./chat.db";
-// const sqlite = sqlite3.verbose();
-// const db = new sqlite.Database(filepath);
 
 const redisClient = new Redis();
 const redisClientXRead = new Redis();
