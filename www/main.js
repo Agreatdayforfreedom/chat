@@ -11,10 +11,53 @@ const userInfo = localStorage.getItem("user_info")
   ? JSON.parse(localStorage.getItem("user_info"))
   : {};
 export const ws = new WebSocket(`ws://${window.document.location.host}`, token);
+
 sessionStorage.setItem("cr", undefined);
+
+function loadPage() {
+  const body = document.querySelector("body");
+  const load = document.createElement("div");
+  const things = document.createElement("div");
+  const bar = document.createElement("div");
+  const title = document.createElement("span");
+  const text = document.createElement("span");
+  load.classList = "load_page";
+  things.classList = "load_page_things";
+  bar.classList = "progress_bar";
+  title.classList = "load_page_title";
+  text.classList = "load_page_text";
+  load.id = "load_page";
+  title.innerText = "FallApp";
+  text.innerHTML = `<i class="ti ti-lock"></i> End to end encrypted (not really)`;
+  things.innerHTML += `<svg
+  xmlns="http://www.w3.org/2000/svg"
+  class="icon icon-tabler icon-tabler-leaf"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  stroke-width="2"
+  stroke="currentColor"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M5 21c.5 -4.5 2.5 -8 7 -10"></path>
+  <path
+    d="M9 18c6.218 0 10.5 -3.288 11 -12v-2h-4.014c-9 0 -11.986 4 -12 9c0 1 0 3 2 5h3z"
+  ></path>
+</svg>`;
+  load.appendChild(things);
+  things.appendChild(bar);
+  things.appendChild(title);
+  things.appendChild(text);
+
+  body.appendChild(load);
+}
 document.addEventListener("DOMContentLoaded", () => {
   background_chat_preload.src = "./image/background-chat.png"; //* preload
 
+  loadPage();
   header();
   drawRooms();
   usersModal();
@@ -38,6 +81,14 @@ document.addEventListener("DOMContentLoaded", () => {
     } else usersModal(true);
   });
 });
+ws.onopen = function () {
+  if (ws.readyState !== ws.CLOSED && ws.readyState === ws.OPEN) {
+    setTimeout(() => {
+      const remove_load = document.querySelector("#load_page");
+      if (remove_load) remove_load.remove();
+    }, 2500);
+  }
+};
 ws.onmessage = function (message) {
   let { type, read, data } = JSON.parse(message.data);
   if (type === "status") {

@@ -107,12 +107,9 @@ wss.getUniqueID = function () {
   return s4() + s4() + "-" + s4();
 };
 wss.on("connection", async (ws, request) => {
-  // const users = await redisClient.smembers("users");
   const auth_ws_client = request.headers["sec-websocket-protocol"];
-  //todo: when tab is closed, the user status is not set to offline
-  // if (users) ws.send(JSON.stringify({ type: "users", data: users }));
   const val = isAuth(request, ws);
-  if (!val) return; //maybe retrieve the current connections?
+  if (!val) return;
   broadcastConnection(request, ws, "online");
   ws.on("message", async (msg) => {
     const obj = JSON.parse(msg);
@@ -136,22 +133,33 @@ wss.on("connection", async (ws, request) => {
         if (chat.length === 2) read = true; //recipient connected
         for (const [user, sock] of chat) {
           //todo: save message read in db
-          sock.send(
-            JSON.stringify({
-              type: "message",
-              read,
-              data: [
-                JSON.stringify({
-                  emitter: obj.emitter,
-                  content: obj.content,
-                  created_at: date,
-                }),
-              ],
-              room: obj.room,
-            })
-          );
+          if (sock)
+            sock.send(
+              JSON.stringify({
+                type: "message",
+                read,
+                data: [
+                  JSON.stringify({
+                    emitter: obj.emitter,
+                    content: obj.content,
+                    created_at: date,
+                  }),
+                ],
+                room: obj.room,
+              })
+            );
         }
-        if (read) return; // do not push the message to the stream
+        if (read)
+          return await db.run(
+            `
+        INSERT INTO messages(content, room, emitter, created_at)
+          VALUES (?, ?, ?, ?)
+      `,
+            obj.content,
+            obj.room,
+            obj.emitter,
+            +new Date()
+          ); // do not push the message to the stream
         try {
           redisClient.xadd(
             obj.room,
@@ -177,13 +185,12 @@ wss.on("connection", async (ws, request) => {
 
   ws.on("close", () => {
     console.log(request.user + "disconnected");
+    ws.close();
     broadcastConnection(request, ws, "offline");
     leave(ws, auth_ws_client);
   });
 });
 async function join(from, to, room, client) {
-  //todo: attach info user to the room member
-
   const roomExists = await db.get(`SELECT * FROM rooms WHERE id=?`, room);
   if (roomExists) {
     if (!rooms[room]) rooms[room] = {};
@@ -218,7 +225,7 @@ function leave(ws, auth_ws_client) {
   for (const room in rooms) {
     if (rooms[room][auth_ws_client] && rooms[room][auth_ws_client] === ws) {
       console.log(`client ${auth_ws_client} is leaving room: ${room}`);
-      rooms[room][auth_ws_client] = "";
+      delete rooms[room][auth_ws_client];
     }
   }
 }

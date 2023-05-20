@@ -21,6 +21,60 @@ input::placeholder {
   color: #efefef;
 }
 
+.load_page {
+  position: fixed;
+  width: 100%;
+  height: 100vh;
+  background: rgb(44, 30, 19);
+  top: 0;
+  right: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+}
+
+.load_page_things {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.load_page_things > svg {
+  width: 64px !important;
+  height: 64px !important;
+}
+
+.progress_bar {
+  margin: 6px 0;
+  width: 340px;
+  height: 4px;
+  background-color: #352e26;
+  position: relative;
+}
+.progress_bar::before {
+  position: absolute;
+  content: "";
+  background-color: #bd8026;
+  height: 4px;
+  width: 0px;
+  animation: load 2.5s ease-in-out forwards;
+}
+.load_page_title {
+  color: white;
+  font-size: 24px;
+}
+.load_page_text {
+  color: #818181;
+}
+
+@keyframes load {
+  from {
+    width: 0px;
+  }
+  to {
+    width: 340px;
+  }
+}
+
 .welcome_bg {
   width: 100%;
   background: rgb(104, 72, 45);
