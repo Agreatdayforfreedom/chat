@@ -74,6 +74,24 @@ section {
   display: flex;
   align-items: flex-start;
 }
+.name_status {
+  display: flex;
+  flex-direction: column;
+}
+.name_status > #status {
+  font-size: 12px;
+  margin: 0 8px;
+  /* font-weight: ; */
+  text-transform: capitalize;
+}
+
+.offline {
+  color: rgb(131, 26, 26);
+}
+.online {
+  color: #1baf23;
+}
+
 .room:hover {
   cursor: pointer;
   color: #ffffff;
@@ -327,13 +345,13 @@ section {
   left: 0;
   right: 0;
   margin: auto;
-  background-color: rgba(16, 13, 32, 0.925);
+  background-color: rgba(27, 25, 25, 0.534);
   position: absolute;
   text-align: end;
 }
 .user_cards {
   margin: 10px;
-  background-color: #0e011f;
+  background-color: #31281d;
   border-top-left-radius: 10px;
   border-top-right-radius: 10px;
   display: flex;
@@ -351,7 +369,7 @@ section {
   border-bottom: 1px solid #888888;
 }
 .user_card:hover {
-  background-color: #20152e;
+  background-color: #573c2b;
   border-bottom: 1px solid #666666;
 }
 .wrap_info {

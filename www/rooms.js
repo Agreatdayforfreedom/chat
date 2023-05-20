@@ -69,11 +69,13 @@ export async function drawRooms() {
     let from;
     let to;
     const wrap = document.createElement("div");
+    const name_status = document.createElement("div");
     const name = document.createElement("span");
     const img = document.createElement("img");
 
     wrap.classList = "room";
-    wrap.id = room.id;
+    name_status.classList = "name_status";
+    name_status.id = "name_status";
     for (const client in room) {
       if (
         room[client] &&
@@ -83,6 +85,8 @@ export async function drawRooms() {
         to = room[client];
         name.innerText = room[client].name;
         name.classList.add("name_user_card");
+        wrap.id = `user${room[client].id}`;
+
         img.src = room[client].avatar;
         img.alt = `${room[client].name} avatar`;
         img.classList.add("avatar_user_card");
@@ -91,7 +95,8 @@ export async function drawRooms() {
         from = room[client];
     }
     wrap.appendChild(img);
-    wrap.appendChild(name);
+    name_status.appendChild(name); //status is append in main.js
+    wrap.appendChild(name_status);
     document.getElementById("rooms").appendChild(wrap);
     wrap.addEventListener("click", (e) => {
       e.preventDefault();

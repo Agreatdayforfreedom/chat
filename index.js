@@ -98,7 +98,6 @@ app.get("/users", async (_req, res) => {
 });
 
 const wss = new WebSocketServer({ server });
-
 wss.getUniqueID = function () {
   function s4() {
     return Math.floor((1 + Math.random()) * 0x10000)
@@ -108,10 +107,10 @@ wss.getUniqueID = function () {
   return s4() + s4() + "-" + s4();
 };
 wss.on("connection", async (ws, request) => {
-  const users = await redisClient.smembers("users");
+  // const users = await redisClient.smembers("users");
   const auth_ws_client = request.headers["sec-websocket-protocol"];
   //todo: when tab is closed, the user status is not set to offline
-  if (users) ws.send(JSON.stringify({ type: "users", data: users }));
+  // if (users) ws.send(JSON.stringify({ type: "users", data: users }));
   const val = isAuth(request, ws);
   if (!val) return; //maybe retrieve the current connections?
   broadcastConnection(request, ws, "online");
@@ -225,57 +224,15 @@ function leave(ws, auth_ws_client) {
   }
 }
 async function broadcastConnection(req, wsclient, status) {
-  if (status === "online") {
-    Promise.all([
-      await redisClient.sadd(
-        "users",
-        JSON.stringify({ type: "status", status, user: req.user })
-      ),
-      await redisClient.srem(
-        "users",
-        JSON.stringify({ type: "status", status: "offline", user: req.user })
-      ),
-    ]);
-  } else if (status === "offline") {
-    Promise.all([
-      await redisClient.sadd(
-        "users",
-        JSON.stringify({ type: "status", status, user: req.user })
-      ),
-      await redisClient.srem(
-        "users",
-        JSON.stringify({ type: "status", status: "online", user: req.user })
-      ),
-    ]);
-  }
-  // process.nextTick(async () => {
-  //   wsclient.send(JSON.stringify(await redisClient.smembers("users")));
-  //   console.log("sent");
-  // });
-
   for (const client of wss.clients) {
-    // if (status === "offline" && wsclient === client) {
-    //   client.close();
-    // }
     if (client.readyState === ws.OPEN) {
       client.send(
-        JSON.stringify([
-          { type: "users" },
-          JSON.stringify({ type: "status", status, user: req.user }),
-        ])
+        JSON.stringify({ type: "status", data: { user: req.user, status } })
       );
     }
   }
 }
-function broadcast(msg) {
-  for (const client of wss.clients) {
-    if (client.readyState === wss.OPEN) {
-      client.send(JSON.stringify(msg));
-    }
-  }
-}
 
-let lastRecordId = "$";
 //prettier-ignore
 async function processStreamMessages(stream, user, room, ws) {
   let messages = [];

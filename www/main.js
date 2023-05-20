@@ -40,7 +40,27 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 ws.onmessage = function (message) {
   let { type, read, data } = JSON.parse(message.data);
-  console.log({ type, read, data });
+  if (type === "status") {
+    const exists = document.querySelector(
+      `#user${data.user} > #name_status > #status`
+    );
+    if (exists) {
+      exists.innerText = data.status;
+      exists.classList = data.status;
+      return;
+    }
+
+    const div = document.querySelector(`#user${data.user} > #name_status`);
+    if (div) {
+      const status = document.createElement("span");
+
+      status.classList = data.status;
+      status.id = "status";
+      status.innerText = data.status;
+
+      div.appendChild(status);
+    }
+  }
   if (Array.isArray(data)) {
     if (type === "message" || type === "stream") {
       // console.log(JSON.parse(data));
@@ -61,7 +81,7 @@ ws.onmessage = function (message) {
         div2.appendChild(span);
         document.querySelector("#messages").appendChild(div);
       }
-      drawMessages(data, read);
+      drawMessages(data, read, type);
     }
   }
   if (!type && read && !data) {
