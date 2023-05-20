@@ -68,7 +68,8 @@ ws.onmessage = function (message) {
     const no_seen_messages = document.querySelectorAll("#check");
     if (no_seen_messages.length > 0)
       for (const el of no_seen_messages) {
-        if (el.classList.contains("msg_seen")) return;
+        console.log(el);
+        if (el.classList.contains("msg_seen")) continue;
         el.classList.add("msg_seen");
       }
   }

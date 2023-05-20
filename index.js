@@ -70,7 +70,6 @@ app.post("/login", async (req, res) => {
 });
 
 app.get("/rooms", isAuthHttp, async (req, res) => {
-  console.log(req.user, "USEEEEEEEER");
   const all = await db.all(
     `SELECT 
           r.id AS id,
@@ -118,7 +117,6 @@ wss.on("connection", async (ws, request) => {
   broadcastConnection(request, ws, "online");
   ws.on("message", async (msg) => {
     const obj = JSON.parse(msg);
-    console.log(obj);
     const { type } = obj;
     switch (type) {
       case "join":
@@ -137,9 +135,8 @@ wss.on("connection", async (ws, request) => {
         //if the recipient is listening messages, send read as true and does not push the message to the stream
         let read = false;
         if (chat.length === 2) read = true; //recipient connected
-        console.log(chat);
         for (const [user, sock] of chat) {
-          console.log(user);
+          console.log(user, "users");
           //todo: save message read in db
           sock.send(
             JSON.stringify({
@@ -188,7 +185,6 @@ wss.on("connection", async (ws, request) => {
 });
 async function join(from, to, room, client) {
   //todo: attach info user to the room member
-  console.log("joining", from, to, room);
 
   const roomExists = await db.get(`SELECT * FROM rooms WHERE id=?`, room);
   if (roomExists) {
@@ -223,9 +219,9 @@ async function join(from, to, room, client) {
 function leave(ws, auth_ws_client) {
   for (const room in rooms) {
     if (rooms[room][auth_ws_client] && rooms[room][auth_ws_client] === ws) {
+      console.log(`client ${auth_ws_client} is leaving room: ${room}`);
       rooms[room][auth_ws_client] = "";
     }
-    console.log(rooms[room], "ROOMS");
   }
 }
 async function broadcastConnection(req, wsclient, status) {
@@ -315,8 +311,6 @@ async function processStreamMessages(stream, user, room, ws) {
   return
 }
     if (messages.length > 0) {
-      console.log(messages)
-      console.log("sending queue to: "+user, messages);
       ws.send(JSON.stringify({ type: "stream", data: messages }));
   }
 }
